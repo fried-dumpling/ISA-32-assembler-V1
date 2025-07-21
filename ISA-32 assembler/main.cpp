@@ -110,7 +110,7 @@ namespace assembler {
 			}
 		};
 
-		template <class ST, class SK, typename IN, class EX>
+		template <class ST, class SK, typename IN>
 		class PDA {
 		public:
 			class Rule {
@@ -126,11 +126,19 @@ namespace assembler {
 				Rule rule;
 			}TransitionData;
 
-			typedef struct _QueueData : public EX {
+			typedef struct _QueueData {
+				using TransitionIT = typename std::multimap<ST, TransitionData>::iterator;
+				typedef struct _QueueDataRD {
+					ST cur;
+					size_t id;
+					TransitionIT transition;
+				} QueueDataRD;
+
 				ST cur;
 				std::stack<SK> stack;
 				size_t id;
-				typename std::multimap<ST, TransitionData>::iterator transition;
+				TransitionIT transition;
+				std::vector<QueueDataRD> tracker;
 			} QueueData;
 
 			enum ReturnData {
@@ -190,7 +198,7 @@ namespace assembler {
 				return it->second;
 			}
 
-			ReturnData run(std::queue<QueueData>& inputQ, std::queue<QueueData>& outputQ, IN data) {
+			ReturnData run(std::queue<QueueData>& inputQ, IN data) {
 				if (inputQ.empty())
 					return ReturnData::Empty;
 
@@ -213,7 +221,9 @@ namespace assembler {
 						tmp.stack = QD.stack;
 						tmp.id = QD.id + it->second.rule.increment;
 						tmp.transition = it;
-						outputQ.push(tmp);
+						tmp.tracker = QD.tracker;
+						tmp.tracker.push_back({ tmp.cur, tmp.id, tmp.transition });
+						inputQ.push(tmp);
 						moved = true;
 					}
 				}
@@ -1409,74 +1419,16 @@ namespace assembler {
 			__WSPDC__,
 		};
 
-		struct _Tree;
-
-		typedef struct _Diverge {
-			struct _Tree* prevTree;
-			std::vector<struct _Tree*>::iterator cur;
-			std::vector<struct _Tree*> child;
-		} Diverge;
-
 		typedef struct _Tree {
 			lexer::Token token;
-			Diverge* prevDiv; 
-			std::set<Diverge*> diverge;
+			T type;
+			struct _Tree* prev; 
+			std::vector<struct _Tree*>::iterator it;
+			std::vector<struct _Tree*> child;
 		} Tree;
 
-		typedef struct _QueueDataEX {
-			Tree* tree;
-		} QueueDataEX;
-
-		void delDiverge(std::queue<Diverge*>& divQ, std::queue<Tree*>& treeQ) {
-			Diverge* del = divQ.front();
-			divQ.pop();
-			if (!del)
-				return;
-			for (auto it = del->child.begin(); it != del->child.end(); it++) {
-				treeQ.push(*it);
-			}
-			delete del;
-		}
-
-		void delTree(std::queue<Tree*>& treeQ, std::queue<Diverge*>& divQ) {
-			Tree* del = treeQ.front();
-			treeQ.pop();
-			if (!del)
-				return;
-			for (auto it = del->diverge.begin(); it != del->diverge.end(); it++) {
-				divQ.push(*it);
-			}
-			delete del;
-		}
-
-		void delAll(Tree* pTree) {
-			std::queue<Tree*> TDQ;
-			std::queue<Diverge*> DDQ;
-
-			TDQ.push(pTree);
-			while (!TDQ.empty() || !DDQ.empty()) {
-				if (!TDQ.empty())
-					delTree(TDQ, DDQ);
-				if (!DDQ.empty())
-					delDiverge(DDQ, TDQ);
-			}
-		}
-
-		void delAll(Diverge* pDiverge) {
-			std::queue<Tree*> TDQ;
-			std::queue<Diverge*> DDQ;
-
-			DDQ.push(pDiverge);
-			while (!TDQ.empty() || !DDQ.empty()) {
-				if (!DDQ.empty())
-					delDiverge(DDQ, TDQ);
-				if (!TDQ.empty())
-					delTree(TDQ, DDQ);
-			}
-		}
-
 		using TT = lexer::TokenType;
-		using PPDA = tools::PDA<S, T, TT, QueueDataEX>;
+		using PPDA = tools::PDA<S, T, TT>;
 		using PRET = PPDA::ReturnData;
 
 		PPDA::CreateData parserTable = {
@@ -1534,24 +1486,18 @@ namespace assembler {
 
 		PPDA parserPDA(parserTable);
 
-		bool Parser(std::vector<lexer::Token>& tokens, Tree*& tree) {
+		bool Parser(std::vector<lexer::Token>& tokens, Tree*& outTree) {
 
 			size_t len = tokens.size();
 			size_t maxID = 0;
-			Tree* curTree = NULL;
+			Tree* tree = NULL;
+			std::vector<PPDA::QueueData::QueueDataRD> tracker;
 			S curState = S::success;
 			bool success = false;
 
 			std::queue<PPDA::QueueData> stateQ;
+			stateQ.push({ S::start, {}, 0, {} });
 			PPDA::QueueData tmp = {};
-			tmp.cur = S::start;
-			tmp.stack = {};
-			tmp.id = 0;
-			tmp.transition = parserPDA.defTransition();
-			tmp.tree = new Tree;
-			tmp.tree->prevDiv = NULL;
-			tmp.tree->diverge = {};
-			stateQ.push(tmp);
 			lexer::Token curToken = {};
 			while (!stateQ.empty()) {
 				PPDA::QueueData qData = stateQ.front();
@@ -1561,78 +1507,56 @@ namespace assembler {
 					curToken = tokens[qData.id];
 
 				std::queue<PPDA::QueueData> outQ;
-				qData.tree->token = curToken;
-				PRET ret = parserPDA.run(stateQ, outQ, curToken.type);
-				while (!outQ.empty()) {
-					PPDA::QueueData outData = outQ.front();
-					outQ.pop();
-					outData.tree = qData.tree;
-					if (outData.transition->second.rule.pushList.empty() && outData.transition->second.rule.pop) {
-						if (outData.tree->prevDiv->cur == outData.tree->prevDiv->child.end()) {
-							outData.tree = *outData.tree->prevDiv->prevTree->prevDiv->cur;
-						}
-						else {
-							outData.tree->prevDiv->cur++;
-							if (outData.tree->prevDiv->cur != outData.tree->prevDiv->child.end())
-								outData.tree = *outData.tree->prevDiv->cur;
-						}
-					}
-					else {
-						Diverge* nDiv = new Diverge;
-						nDiv->prevTree = qData.tree;
-						nDiv->child = {};
-						for (auto it = outData.transition->second.rule.pushList.begin(); it != outData.transition->second.rule.pushList.end(); it++) {
-							Tree* nTree = new Tree;
-							nTree->prevDiv = nDiv;
-							nTree->diverge = {};
-							nDiv->child.push_back(nTree);
-						}
-						nDiv->cur = nDiv->child.begin();
-						outData.tree->diverge.insert(nDiv);
-						outData.tree = *nDiv->cur;
-					}
-					stateQ.push(outData);
-				}
+				PRET ret = parserPDA.run(stateQ, curToken.type);
 
 				if (ret == PRET::NoTransition) {
 					if (qData.id >= maxID && qData.cur == S::success) {
 						maxID = qData.id;
 						curState = qData.cur;
-
-						Tree* cur;
-						for (cur = qData.tree; cur->prevDiv != NULL; cur = cur->prevDiv->prevTree) {}
-						curTree = cur;
+						tracker = qData.tracker;
 
 						success = true;
 					}
-					else {
-						Tree* cur = qData.tree; 
-						while (cur->diverge.empty()) {
-							if (!cur->prevDiv)
-								break;
-							for (auto it = cur->prevDiv->child.begin(); it != cur->prevDiv->child.end(); it++) {
-								if (*it == cur) {
-									cur->prevDiv->child.erase(it);
-									break;
-								}
-							}
-							Tree* next = cur->prevDiv->prevTree;
-							if (cur->prevDiv->child.empty()) {
-								cur->prevDiv->prevTree->diverge.erase(cur->prevDiv);
-								delAll(cur->prevDiv);
-							}
-							else {
-								delAll(cur);
-								break;
-							}
-
-							cur = next;
-						}
+				}
+			}
+			
+			Tree* cur = new Tree;
+			cur->prev = NULL;
+			cur->type = T::__start__;
+			tree = cur;
+			for (auto it = tracker.begin(); it != tracker.end(); it++) {
+				auto track = *it;
+				cur->child = {};
+				cur->token = (track.id < len) ? tokens[track.id] : lexer::Token({ "", TT::unknown });
+				cur->it = cur->child.end();
+				if (track.transition->second.rule.pushList.empty() && track.transition->second.rule.pop) {
+					if (!cur)
+						break;
+					while (cur->prev) {
+						cur->prev->it++;
+						if (cur->prev->it == cur->prev->child.end())
+							cur = cur->prev;
+						else
+							break;
 					}
+					if (!cur->prev)
+						break;
+					cur = *cur->prev->it;
+				}
+				else {
+					for (auto si = track.transition->second.rule.pushList.begin(); si != track.transition->second.rule.pushList.end(); si++) {
+						Tree* nTree = new Tree;
+						nTree->type = *si;
+						nTree->prev = cur;
+						cur->child.push_back(nTree);
+					}
+					cur->it = cur->child.begin();
+
+					cur = *cur->it;
 				}
 			}
 
-			tree = curTree;
+			outTree = tree;
 
 			return success;
 		}
@@ -1652,25 +1576,18 @@ using namespace assembler::tools;
 using namespace assembler::lexer;
 using namespace assembler::parser;
 
-void printTree(Tree* pTree, std::vector<vector<vector<Tree*>>>& out, int level, int div) {
+
+void printTree(Tree* pTree, std::vector<vector<Tree*>>& out, int level) {
 	if (!pTree)
 		return;
 
 	if (out.size() <= level)
 		out.push_back({});
-	if (out[level].size() <= div)
-		out[level].push_back({});
 
-	out[level][div].push_back(pTree);
+	out[level].push_back(pTree);
 
-	int ndiv = 0;
-	for (auto it = pTree->diverge.begin(); it != pTree->diverge.end(); it++) {
-		if (*it) {
-			for (auto si = (*it)->child.begin(); si != (*it)->child.end(); si++) {
-				printTree(*si, out, level + 1, ndiv);
-			}
-		}
-		ndiv++;
+	for (auto it = pTree->child.begin(); it != pTree->child.end(); it++) {
+		printTree(*it, out, level + 1);
 	}
 }
 
@@ -1697,19 +1614,13 @@ int main() {
 	cout << "------------------------------------------------------------" << endl;
 	cout << valid << endl;
 	cout << "------------------------------------------------------------" << endl;
-	std::vector<std::vector<std::vector<Tree*>>> out;
-	printTree(tree, out, 0, 0);
+	std::vector<std::vector<Tree*>> out;
+	printTree(tree, out, 0);
 	for (auto it = out.begin(); it != out.end(); it++) {
-		cout << "|";
 		for (auto si = it->begin(); si != it->end(); si++) {
-			for (auto ti = si->begin(); ti != si->end(); ti++) {
-				cout << (*ti)->token.text;
-				cout << ":";
-				cout << (int)(*ti)->token.type;
-				if (ti + 1 != si->end())
-					cout << ", ";
-			}
-			cout << "|";
+			cout << (*si)->token.text << ", " << (int)(*si)->type;
+			if (si + 1 != it->end())
+				cout << ", ";
 		}
 		cout << endl;
 	}
