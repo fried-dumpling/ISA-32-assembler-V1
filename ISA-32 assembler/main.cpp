@@ -1463,7 +1463,7 @@ namespace assembler {
 			std::vector<struct _Tree*>::iterator it;
 			std::vector<struct _Tree*> child;
 		} Tree;
-
+    
 		using TT = lexer::TokenType;
 		using PPDA = tools::PDA<S, T, TT>;
 		using PRET = PPDA::ReturnData;
@@ -1559,6 +1559,9 @@ namespace assembler {
 						curState = qData.cur;
 						tracker = qData.tracker;
 					}
+					cur->it = cur->child.begin();
+
+					cur = *cur->it;
 				}
 			}
 			
@@ -1597,11 +1600,9 @@ namespace assembler {
 					}
 					//cout << endl;
 					cur->it = cur->child.begin();
-
 					cur = *cur->it;
 				}
 			}
-
 			outTree = tree;
 
 			return success;
@@ -1634,8 +1635,7 @@ void printTree(Tree* pTree, std::vector<vector<vector<Tree*>>>& out, std::vector
 	if (tmp.size() <= level)
 		tmp.resize(level + 1, 0);
 
-	out[level][div].push_back(pTree);
-
+	out[level].push_back(pTree);
 
 	for (auto it = pTree->child.begin(); it != pTree->child.end(); it++) {
 		printTree(*it, out, tmp, level + 1, tmp[level]);
@@ -1670,7 +1670,6 @@ int main() {
 	std::vector<std::vector<std::vector<Tree*>>> out;
 	printTree(tree, out, tmp, 0, 0);
 	for (auto it = out.begin(); it != out.end(); it++) {
-		cout << "|";
 		for (auto si = it->begin(); si != it->end(); si++) {
 			for (auto ti = si->begin(); ti != si->end(); ti++) {
 				if ((*ti)->token.text.empty())
