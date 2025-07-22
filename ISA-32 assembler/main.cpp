@@ -209,20 +209,20 @@ namespace assembler {
 				bool moved = false;
 
 				for (auto it = range.first; it != range.second; it++) {
-					if (it->second.rule.function(data, ((QD.stack.empty()) ? (SK)0 : QD.stack.top()))) {
-						if (it->second.rule.pop && !QD.stack.empty())
-							QD.stack.pop();
-						if (!it->second.rule.pushList.empty()) {
-							for (auto si = it->second.rule.pushList.begin(); si != it->second.rule.pushList.end(); si++)
-								QD.stack.push(*si);
-						}
+					if (it->second.rule.function(data, ((QD.stack.empty()) ? (SK)-1 : QD.stack.top()))) {
 						QueueData tmp = {};
 						tmp.cur = it->second.end;
 						tmp.stack = QD.stack;
 						tmp.id = QD.id + it->second.rule.increment;
 						tmp.transition = it;
 						tmp.tracker = QD.tracker;
-						tmp.tracker.push_back({ tmp.cur, tmp.id, tmp.transition });
+						tmp.tracker.push_back({ QD.cur, QD.id, tmp.transition });
+						if (it->second.rule.pop && !tmp.stack.empty())
+							tmp.stack.pop();
+						if (!it->second.rule.pushList.empty()) {
+							for (auto si = it->second.rule.pushList.begin(); si != it->second.rule.pushList.end(); si++)
+								tmp.stack.push(*si);
+						}
 						inputQ.push(tmp);
 						moved = true;
 					}
@@ -429,6 +429,7 @@ namespace assembler {
 			_tilde_, _ampersend_, _verticalbar_, _caret_,
 
 			_whitespace_,
+			_newline_,
 
 			//===================================================================================
 
@@ -627,6 +628,9 @@ namespace assembler {
 			{S::__firstnum__, false},
 			{S::__hexnum__, false}, {S::__decnum__, false}, {S::__octnum__, false}, {S::__binnum__, false},
 			
+			{ S::_whitespace_, false },
+			{ S::_newline_, false },
+
 			{S::__InterTreeEpsilonID__, false},
 			{S::__InterTreeEpsilonUK__, false},
 			{S::__KeyTreeEpsilonID__, false},
@@ -916,11 +920,9 @@ namespace assembler {
 			{ S::_percent_gen_openbrack_23, S::_percent_gen_openbrack_23_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
 			{ S::_percent_gen_openbrack_24, S::_percent_gen_openbrack_24_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
 
-			{ S::__identifier__, S::__identifier__, {true , [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_'); }}},
-
 			{ S::__start__, S::__firstnum__, {true , [](char c)->bool {return '0' <= c && c <= '9'; }}},
 			{ S::__firstnum__, S::__hexnum__, {true , [](char c)->bool {return c == 'x' || c == 'X'; }}},
-			{ S::__firstnum__, S::__decnum__, {true , [](char c)->bool {return ('0' <= c && c <= '9') || c == 'd' || c == 'D'; }}},
+			{ S::__firstnum__, S::__decnum__, {false , [](char c)->bool {return true; }} },
 			{ S::__firstnum__, S::__octnum__, {true , [](char c)->bool {return c == 'o' || c == 'O'; }}},
 			{ S::__firstnum__, S::__binnum__, {true , [](char c)->bool {return c == 'b' || c == 'B'; }}},
 
@@ -943,8 +945,9 @@ namespace assembler {
 			{ S::__start__, S::_caret_, {true , [](char c)->bool {return c == '^'; }} },
 
 			{ S::__start__, S::_whitespace_, {true , [](char c)->bool {return c == ' '; }} },
+			{ S::__start__, S::_newline_, {true , [](char c)->bool {return c == '\n'; }} },
 
-			{ S::_whitespace_, S::_whitespace_, {true , [](char c)->bool {return c == ' '; }} },
+			{ S::_whitespace_, S::_whitespace_, {true , [](char c)->bool {return c == ' ' && c != '\n'; }}},
 
 			{ S::__start__, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return ('9' < c || c < '0'); }}},
 
@@ -1127,12 +1130,10 @@ namespace assembler {
 			{ S::__KeyTreeEpsilonID__, S::__identifier__, {true, [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_'); }} },
 			{ S::__identifier__, S::__identifier__, {true, [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_'); }} },
 				
-			{ S::__identifier__, S::__unknown__, {true, [](char c)->bool {return c != ' '; }}},
-			{ S::__InterTreeEpsilonID__, S::__unknown__, {true, [](char c)->bool {return c != ' '; }} },
-			{ S::__InterTreeEpsilonUK__, S::__unknown__, {true, [](char c)->bool {return c != ' '; }}},
-			{ S::__KeyTreeEpsilonID__, S::__unknown__, {true, [](char c)->bool {return c != ' '; }} },
-			{ S::__KeyTreeEpsilonUK__, S::__unknown__, {true, [](char c)->bool {return c != ' '; }} },
-			{ S::__unknown__, S::__unknown__, { true, [](char c)->bool {return c != ' '; }}}
+			{ S::__identifier__, S::__unknown__, {true, [](char c)->bool {return !(('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_')) && c != ' ' && c != '\n'; }}},
+			{ S::__InterTreeEpsilonUK__, S::__unknown__, {true, [](char c)->bool {return c != ' ' && c != '\n'; }}},
+			{ S::__KeyTreeEpsilonUK__, S::__unknown__, {true, [](char c)->bool {return c != ' ' && c != '\n'; }} },
+			{ S::__unknown__, S::__unknown__, { true, [](char c)->bool {return c != ' ' && c != '\n'; }}}
 			}
 		};
 
@@ -1181,6 +1182,7 @@ namespace assembler {
 			tilde, ampersend, verticalbar, caret,
 
 			whitespace,
+			newline,
 
 			identifier,
 
@@ -1203,38 +1205,38 @@ namespace assembler {
 			{S::call, TokenType::call}, {S::ret, TokenType::ret},
 			{S::nop, TokenType::nop}, {S::halt, TokenType::halt},
 
-			{S::_dot_gen_openbrack_0_closebrack_, TokenType::percent_gen0},
-			{S::_dot_gen_openbrack_1_closebrack_, TokenType::percent_gen1},
-			{S::_dot_gen_openbrack_2_closebrack_, TokenType::percent_gen2},
-			{S::_dot_gen_openbrack_3_closebrack_, TokenType::percent_gen3},
-			{S::_dot_gen_openbrack_4_closebrack_, TokenType::percent_gen4},
-			{S::_dot_gen_openbrack_5_closebrack_, TokenType::percent_gen5},
-			{S::_dot_gen_openbrack_6_closebrack_, TokenType::percent_gen6},
-			{S::_dot_gen_openbrack_7_closebrack_, TokenType::percent_gen7},
-			{S::_dot_gen_openbrack_8_closebrack_, TokenType::percent_gen8},
-			{S::_dot_gen_openbrack_9_closebrack_, TokenType::percent_gen9},
-			{S::_dot_gen_openbrack_10_closebrack_, TokenType::percent_gen10},
-			{S::_dot_gen_openbrack_11_closebrack_, TokenType::percent_gen11},
-			{S::_dot_gen_openbrack_12_closebrack_, TokenType::percent_gen12},
-			{S::_dot_gen_openbrack_13_closebrack_, TokenType::percent_gen13},
-			{S::_dot_gen_openbrack_14_closebrack_, TokenType::percent_gen14},
-			{S::_dot_gen_openbrack_15_closebrack_, TokenType::percent_gen15},
-			{S::_dot_gen_openbrack_16_closebrack_, TokenType::percent_gen16},
-			{S::_dot_gen_openbrack_17_closebrack_, TokenType::percent_gen17},
-			{S::_dot_gen_openbrack_18_closebrack_, TokenType::percent_gen18},
-			{S::_dot_gen_openbrack_19_closebrack_, TokenType::percent_gen19},
-			{S::_dot_gen_openbrack_20_closebrack_, TokenType::percent_gen20},
-			{S::_dot_gen_openbrack_21_closebrack_, TokenType::percent_gen21},
-			{S::_dot_gen_openbrack_22_closebrack_, TokenType::percent_gen22},
-			{S::_dot_gen_openbrack_23_closebrack_, TokenType::percent_gen23},
-			{S::_dot_gen_openbrack_24_closebrack_, TokenType::percent_gen24},
-			{S::_dot_sbp, TokenType::percent_sbp},
-			{S::_dot_stack, TokenType::percent_zero},
-			{S::_dot_one, TokenType::percent_one},
-			{S::_dot_full, TokenType::percent_full},
-			{S::_dot_pc, TokenType::percent_pc},
-			{S::_dot_stack, TokenType::percent_stack},
-			{S::_dot_flag, TokenType::percent_flag},
+			{S::_dot_gen_openbrack_0_closebrack_, TokenType::dot_gen0},
+			{S::_dot_gen_openbrack_1_closebrack_, TokenType::dot_gen1},
+			{S::_dot_gen_openbrack_2_closebrack_, TokenType::dot_gen2},
+			{S::_dot_gen_openbrack_3_closebrack_, TokenType::dot_gen3},
+			{S::_dot_gen_openbrack_4_closebrack_, TokenType::dot_gen4},
+			{S::_dot_gen_openbrack_5_closebrack_, TokenType::dot_gen5},
+			{S::_dot_gen_openbrack_6_closebrack_, TokenType::dot_gen6},
+			{S::_dot_gen_openbrack_7_closebrack_, TokenType::dot_gen7},
+			{S::_dot_gen_openbrack_8_closebrack_, TokenType::dot_gen8},
+			{S::_dot_gen_openbrack_9_closebrack_, TokenType::dot_gen9},
+			{S::_dot_gen_openbrack_10_closebrack_, TokenType::dot_gen10},
+			{S::_dot_gen_openbrack_11_closebrack_, TokenType::dot_gen11},
+			{S::_dot_gen_openbrack_12_closebrack_, TokenType::dot_gen12},
+			{S::_dot_gen_openbrack_13_closebrack_, TokenType::dot_gen13},
+			{S::_dot_gen_openbrack_14_closebrack_, TokenType::dot_gen14},
+			{S::_dot_gen_openbrack_15_closebrack_, TokenType::dot_gen15},
+			{S::_dot_gen_openbrack_16_closebrack_, TokenType::dot_gen16},
+			{S::_dot_gen_openbrack_17_closebrack_, TokenType::dot_gen17},
+			{S::_dot_gen_openbrack_18_closebrack_, TokenType::dot_gen18},
+			{S::_dot_gen_openbrack_19_closebrack_, TokenType::dot_gen19},
+			{S::_dot_gen_openbrack_20_closebrack_, TokenType::dot_gen20},
+			{S::_dot_gen_openbrack_21_closebrack_, TokenType::dot_gen21},
+			{S::_dot_gen_openbrack_22_closebrack_, TokenType::dot_gen22},
+			{S::_dot_gen_openbrack_23_closebrack_, TokenType::dot_gen23},
+			{S::_dot_gen_openbrack_24_closebrack_, TokenType::dot_gen24},
+			{S::_dot_sbp, TokenType::dot_sbp},
+			{S::_dot_stack, TokenType::dot_zero},
+			{S::_dot_one, TokenType::dot_one},
+			{S::_dot_full, TokenType::dot_full},
+			{S::_dot_pc, TokenType::dot_pc},
+			{S::_dot_stack, TokenType::dot_stack},
+			{S::_dot_flag, TokenType::dot_flag},
 
 			{S::_percent_gen_openbrack_0_closebrack_, TokenType::percent_gen0},
 			{S::_percent_gen_openbrack_1_closebrack_, TokenType::percent_gen1},
@@ -1286,6 +1288,7 @@ namespace assembler {
 			{S::_tilde_, TokenType::tilde}, {S::_ampersend_, TokenType::ampersend}, {S::_verticalbar_, TokenType::verticalbar}, {S::_caret_, TokenType::caret},
 
 			{S::_whitespace_, TokenType::whitespace},
+			{S::_newline_, TokenType::newline},
 
 			{S::__identifier__, TokenType::identifier},
 
@@ -1298,8 +1301,7 @@ namespace assembler {
 		} Token;
 
 		void Lexer(std::string input, std::vector<Token>& tokens) {
-			input.push_back(' ');
-
+			//input.push_back(' ');
 			// ----<<tmp>>----
 			std::string removedTab;
 			for (auto it = input.begin(); it != input.end(); it++) {
@@ -1386,6 +1388,8 @@ namespace assembler {
 		};
 
 		enum class T {
+			__unknown__ = -1,
+
 			__start__,
 			__success__,
 
@@ -1396,9 +1400,6 @@ namespace assembler {
 			__bss__,
 
 			__instruction__,
-
-			__opcode__,
-			__operend__,
 
 			__regvarient__,
 			__flagvarient__,
@@ -1417,16 +1418,52 @@ namespace assembler {
 
 			__WSPAL__,
 			__WSPDC__,
+			__NEWL__,
+		};
+
+		std::map<T, std::string> treeMap = {
+			{ T::__unknown__, "unknown" },
+			
+			{ T::__start__, "start" },
+			{ T::__success__, "success" },
+
+			{ T::__section__, "section" },
+
+			{ T::__text__, "text" },
+			{ T::__data__, "data" },
+			{ T::__bss__, "bss" },
+
+			{ T::__instruction__, "instruction" },
+
+			{ T::__regvarient__, "regvarient" },
+			{ T::__flagvarient__, "flagvarient" },
+
+			{ T::__register__, "register" },
+			{ T::__regname__, "regname" },
+			{ T::__regmode__, "regmode" },
+
+			{ T::__immidate__, "immidate" },
+
+			{ T::__label__, "label" },
+			{ T::__labelid__, "labelid" },
+			{ T::__labelsign__, "labelsign" },
+
+			{ T::__identifier__, "identifier" },
+
+			{ T::__WSPAL__, "WSPAL" },
+			{ T::__WSPDC__, "WSPDC" },
+			{ T::__NEWL__, "NEWL" }
 		};
 
 		typedef struct _Tree {
 			lexer::Token token;
 			T type;
+			bool useToken;
 			struct _Tree* prev; 
 			std::vector<struct _Tree*>::iterator it;
 			std::vector<struct _Tree*> child;
 		} Tree;
-
+    
 		using TT = lexer::TokenType;
 		using PPDA = tools::PDA<S, T, TT>;
 		using PRET = PPDA::ReturnData;
@@ -1445,42 +1482,43 @@ namespace assembler {
 			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__WSPAL__) && (t == TT::whitespace); }}},
 			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__WSPDC__) && (t == TT::whitespace); }}},
 			{S::run, S::run, {false, true, {}, [](TT t, T s)->bool {return (s == T::__WSPDC__) && (t != TT::whitespace); }}},
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__NEWL__) && (t == TT::newline); }}},
 
 			{S::run, S::run, {false, true, {T::__section__}, [](TT t, T s)->bool {return (s == T::__start__); }}},
 
-			{S::run, S::run, {true, true, {T::__text__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::text); }}},
-			{S::run, S::run, {true, true, {T::__data__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::data); }}},
-			{S::run, S::run, {true, true, {T::__bss__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::bss); }}},
-			{S::run, S::run, {true, true, {T::__section__, T::__text__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::text); }}},
-			{S::run, S::run, {true, true, {T::__section__, T::__data__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::data); }}},
-			{S::run, S::run, {true, true, {T::__section__, T::__bss__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::bss); }}},
+			{S::run, S::run, {true, true, {T::__text__,	T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::text); }}},
+			{S::run, S::run, {true, true, {T::__data__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::data); }}},
+			{S::run, S::run, {true, true, {T::__bss__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::bss); }}},
+			{S::run, S::run, {true, true, {T::__section__, T::__text__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::text); }}},
+			{S::run, S::run, {true, true, {T::__section__, T::__data__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::data); }}},
+			{S::run, S::run, {true, true, {T::__section__, T::__bss__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::bss); }}},
 
-			{S::run, S::run, {false, true, {T::__instruction__}, [](TT t, T s)->bool {return (s == T::__text__) && ((TT::add <= t && t <= TT::halt)); }}},
-			{S::run, S::run, {false, true, {T::__text__, T::__instruction__}, [](TT t, T s)->bool {return (s == T::__text__) && ((TT::add <= t && t <= TT::halt)); }}},
+			{S::run, S::run, {false, true, {T::__NEWL__, T::__WSPDC__, T::__instruction__}, [](TT t, T s)->bool {return (s == T::__text__) && ((TT::add <= t && t <= TT::halt)); }}},
+			{S::run, S::run, {false, true, {T::__text__, T::__NEWL__, T::__WSPDC__, T::__instruction__}, [](TT t, T s)->bool {return (s == T::__text__) && ((TT::add <= t && t <= TT::halt)); }}},
 
-			{S::run, S::run, {false, true, {T::__operend__, T::__regvarient__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::ld || t == TT::st); }}},
-			{S::run, S::run, {false, true, {T::__operend__, T::__flagvarient__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::jmp); }}},
-			{S::run, S::run, {false, true, {T::__operend__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t != TT::ld && t != TT::st && t != TT::jmp); }}},
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::ret || t == TT::nop || t == TT::halt); }}}, //N
+			{S::run, S::run, {true, true,  {T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::pop || t == TT::push); }}}, //R
+			{S::run, S::run, {true, true, {T::__register__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::add || t == TT::sub || t == TT::addc || t == TT::subc || t == TT::bxr || t == TT::bor || t == TT::bnd || t == TT::shiftl || t == TT::shiftr || t == TT::cmp || t == TT::mov); }}}, //R-R
+			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::addi || t == TT::subi || t == TT::bxri || t == TT::bori || t == TT::bndi || t == TT::shiftli || t == TT::shiftri || t == TT::set); }}}, //R-DI
+			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::call); }}}, //R-SDI
+			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__, T::__regvarient__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::ld || t == TT::st); }}}, //RV-R-SDI
+			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__, T::__flagvarient__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::jmp); }}}, //FV-R-SDI
 
-			{S::run, S::run, {true, true, {T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__regvarient__) && ((TT::dot_gen0 <= t && t <= TT::dot_flag)); }}},
-			{S::run, S::run, {true, true, {T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__flagvarient__) && ((TT::dot_neg <= t && t <= TT::dot_gen) || t == TT::dot_zero || t == TT::dot_one); }}},
-
-			{S::run, S::run, {true, true, {T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__operend__) && (t == TT::ret || t == TT::nop || t == TT::halt); }}},
-			{S::run, S::run, {true, true,  {T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__operend__) && (t == TT::pop || t == TT::push); }}},
-			{S::run, S::run, {true, true, {T::__register__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__operend__) && (t == TT::add || t == TT::sub || t == TT::addc || t == TT::subc || t == TT::bxr || t == TT::bor || t == TT::bnd || t == TT::shiftl || t == TT::shiftr || t == TT::cmp || t == TT::mov); }}},
-			{S::run, S::run, {true, true, {T::__immidate__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__operend__) && (t == TT::addi || t == TT::subi || t == TT::bxri || t == TT::bori || t == TT::bndi || t == TT::shiftli || t == TT::shiftri || t == TT::set); }}}, //RDI
-			{S::run, S::run, {true, true, {T::__immidate__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__operend__) && (t == TT::ld || t == TT::st || t == TT::jmp || t == TT::call); }}}, //RSDI
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__regvarient__) && ((TT::dot_gen0 <= t && t <= TT::dot_flag)); }}},
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__flagvarient__) && ((TT::dot_neg <= t && t <= TT::dot_gen) || t == TT::dot_zero || t == TT::dot_one); }}},
 
 			{S::run, S::run, {false, true, {T::__regmode__, T::__regname__}, [](TT t, T s)->bool {return (s == T::__register__); }}},
 			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__regname__) && ((TT::percent_gen0 <= t && t <= TT::percent_flag)); }}},
-			{S::run, S::run, {true, true, {T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__regmode__) && ((TT::dot_32 <= t && t <= TT::dot_S8H)); }}},
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__regmode__) && ((TT::dot_32 <= t && t <= TT::dot_S8H)); }}},
+
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__immidate__) && (TT::hexnum <= t && t <= TT::binnum); }}},
 
 			{S::run, S::run, {false, true, {T::__label__}, [](TT t, T s)->bool {return (s == T::__text__) && (t == TT::identifier); }}},
 			{S::run, S::run, {false, true, {T::__text__, T::__label__}, [](TT t, T s)->bool {return (s == T::__text__) && (t == TT::identifier); }}},
 
-			{S::run, S::run, {false, true, {T::__labelsign__, T::__labelid__}, [](TT t, T s)->bool {return (s == T::__label__); }}},
-			{S::run, S::run, {true, true, {T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__labelid__) && (t == TT::identifier); }}},
-			{S::run, S::run, {true, true, {T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__labelsign__) && (t == TT::colon); }}}
+			{S::run, S::run, {false, true, {T::__NEWL__, T::__WSPDC__, T::__labelsign__, T::__WSPDC__, T::__labelid__}, [](TT t, T s)->bool {return (s == T::__label__); }}},
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__labelid__) && (t == TT::identifier); }}},
+			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__labelsign__) && (t == TT::colon); }}}
 			}
 		};
 
@@ -1510,24 +1548,32 @@ namespace assembler {
 				PRET ret = parserPDA.run(stateQ, curToken.type);
 
 				if (ret == PRET::NoTransition) {
-					if (qData.id >= maxID && qData.cur == S::success) {
-						maxID = qData.id;
+					if (qData.id == len && qData.cur == S::success) {
 						curState = qData.cur;
 						tracker = qData.tracker;
 
 						success = true;
 					}
+					if (!success && maxID < qData.id) {
+						maxID = qData.id;
+						curState = qData.cur;
+						tracker = qData.tracker;
+					}
+					cur->it = cur->child.begin();
+
+					cur = *cur->it;
 				}
 			}
 			
 			Tree* cur = new Tree;
 			cur->prev = NULL;
 			cur->type = T::__start__;
+			cur->useToken = false;
 			tree = cur;
 			for (auto it = tracker.begin(); it != tracker.end(); it++) {
 				auto track = *it;
 				cur->child = {};
-				cur->token = (track.id < len) ? tokens[track.id] : lexer::Token({ "", TT::unknown });
+				cur->token = (0 <= track.id && track.id < len) ? tokens[track.id] : lexer::Token({ "u.k", TT::unknown });
 				cur->it = cur->child.end();
 				if (track.transition->second.rule.pushList.empty() && track.transition->second.rule.pop) {
 					if (!cur)
@@ -1544,18 +1590,19 @@ namespace assembler {
 					cur = *cur->prev->it;
 				}
 				else {
-					for (auto si = track.transition->second.rule.pushList.begin(); si != track.transition->second.rule.pushList.end(); si++) {
+					for (auto si = track.transition->second.rule.pushList.rbegin(); si != track.transition->second.rule.pushList.rend(); si++) {
+						//cout << treeMap[*si] << ", " << track.transition->second.rule.increment << ", " << track.transition->second.rule.pop << "|";
 						Tree* nTree = new Tree;
 						nTree->type = *si;
 						nTree->prev = cur;
+						nTree->useToken = track.transition->second.rule.increment;
 						cur->child.push_back(nTree);
 					}
+					//cout << endl;
 					cur->it = cur->child.begin();
-
 					cur = *cur->it;
 				}
 			}
-
 			outTree = tree;
 
 			return success;
@@ -1577,24 +1624,29 @@ using namespace assembler::lexer;
 using namespace assembler::parser;
 
 
-void printTree(Tree* pTree, std::vector<vector<Tree*>>& out, int level) {
+void printTree(Tree* pTree, std::vector<vector<vector<Tree*>>>& out, std::vector<int>& tmp, int level, int div) {
 	if (!pTree)
 		return;
 
 	if (out.size() <= level)
-		out.push_back({});
+		out.resize(level + 1, {});
+	if (out[level].size() <= div)
+		out[level].resize(div + 1, {});
+	if (tmp.size() <= level)
+		tmp.resize(level + 1, 0);
 
 	out[level].push_back(pTree);
 
 	for (auto it = pTree->child.begin(); it != pTree->child.end(); it++) {
-		printTree(*it, out, level + 1);
+		printTree(*it, out, tmp, level + 1, tmp[level]);
 	}
+	tmp[level]++;
 }
 
 int main() {
 
-	char buff[256];
-	cin.getline(buff, 256);
+	char buff[1024];
+	cin.getline(buff, 1024, '\\');
 	string str = buff;
 
 	std::vector<Token> tokens;
@@ -1603,7 +1655,7 @@ int main() {
 	cout << "lex->" << endl;
 	cout << "------------------------------------------------------------" << endl;
 	for (auto it = tokens.begin(); it != tokens.end(); it++) {
-		cout << it->text << "; " << ((it->type == TokenType::unknown) ? "error" : "fine") << endl;
+		cout << ((it->text.front() == '\n') ? "newl" : it->text) << "; " << ((it->type == TokenType::unknown) ? "error" : "fine") << endl;
 	}
 	cout << "------------------------------------------------------------" << endl;
 
@@ -1614,13 +1666,20 @@ int main() {
 	cout << "------------------------------------------------------------" << endl;
 	cout << valid << endl;
 	cout << "------------------------------------------------------------" << endl;
-	std::vector<std::vector<Tree*>> out;
-	printTree(tree, out, 0);
+	std::vector<int> tmp;
+	std::vector<std::vector<std::vector<Tree*>>> out;
+	printTree(tree, out, tmp, 0, 0);
 	for (auto it = out.begin(); it != out.end(); it++) {
 		for (auto si = it->begin(); si != it->end(); si++) {
-			cout << (*si)->token.text << ", " << (int)(*si)->type;
-			if (si + 1 != it->end())
-				cout << ", ";
+			for (auto ti = si->begin(); ti != si->end(); ti++) {
+				if ((*ti)->token.text.empty())
+					cout << (*ti)->token.text << ":" << treeMap[(*ti)->type];
+				else
+					cout << (((*ti)->token.text.front() == '\n') ? "\\n" : (*ti)->token.text) << ":" << treeMap[(*ti)->type];
+				if (ti + 1 != si->end())
+					cout << ", ";
+			}
+			cout << "|";
 		}
 		cout << endl;
 	}
