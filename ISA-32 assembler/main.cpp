@@ -117,8 +117,9 @@ namespace assembler {
 			public:
 				bool increment;
 				bool pop;
+				SK popData;
 				std::vector<SK> pushList;
-				std::function<bool(IN, SK)> function;
+				std::function<bool(IN)> function;
 			};
 
 			typedef struct _TransitionData {
@@ -127,7 +128,7 @@ namespace assembler {
 			}TransitionData;
 
 			typedef struct _QueueData {
-				using TransitionIT = typename std::multimap<ST, TransitionData>::iterator;
+				using TransitionIT = typename std::multimap<SK, TransitionData>::iterator;
 				typedef struct _QueueDataRD {
 					ST cur;
 					size_t id;
@@ -165,7 +166,7 @@ namespace assembler {
 
 		private:
 			std::map<ST, bool> states;
-			std::multimap<ST, TransitionData> transitions;
+			std::map<ST, std::multimap<SK, TransitionData>> transitions;
 
 			void addState(ST state, bool end) {
 				if (this->states.find(state) != this->states.end())
@@ -174,7 +175,13 @@ namespace assembler {
 			}
 
 			void addTransition(ST start, ST end, Rule rule) {
-				this->transitions.insert({ start, {end, rule} });
+				auto it = this->transitions.find(start);
+				if (it == this->transitions.end()) {
+					this->transitions.insert({ start, {} });
+				}
+				it = this->transitions.find(start);
+
+				it->second.insert({ rule.popData, {end, rule} });
 			}
 
 		public:
@@ -209,22 +216,25 @@ namespace assembler {
 				bool moved = false;
 
 				for (auto it = range.first; it != range.second; it++) {
-					if (it->second.rule.function(data, ((QD.stack.empty()) ? (SK)-1 : QD.stack.top()))) {
-						QueueData tmp = {};
-						tmp.cur = it->second.end;
-						tmp.stack = QD.stack;
-						tmp.id = QD.id + it->second.rule.increment;
-						tmp.transition = it;
-						tmp.tracker = QD.tracker;
-						tmp.tracker.push_back({ QD.cur, QD.id, tmp.transition });
-						if (it->second.rule.pop && !tmp.stack.empty())
-							tmp.stack.pop();
-						if (!it->second.rule.pushList.empty()) {
-							for (auto si = it->second.rule.pushList.begin(); si != it->second.rule.pushList.end(); si++)
-								tmp.stack.push(*si);
+					auto rangeSec = it->second.equal_range(((QD.stack.empty()) ? (SK)-1 : QD.stack.top()));
+					for (auto si = rangeSec.first; si != rangeSec.second; si++) {
+						if (si->second.rule.function(data)) {
+							QueueData tmp = {};
+							tmp.cur = si->second.end;
+							tmp.stack = QD.stack;
+							tmp.id = QD.id + si->second.rule.increment;
+							tmp.transition = si;
+							tmp.tracker = QD.tracker;
+							tmp.tracker.push_back({ QD.cur, QD.id, tmp.transition });
+							if (si->second.rule.pop && !tmp.stack.empty())
+								tmp.stack.pop();
+							if (!si->second.rule.pushList.empty()) {
+								for (auto ti = si->second.rule.pushList.begin(); ti != si->second.rule.pushList.end(); ti++)
+									tmp.stack.push(*ti);
+							}
+							inputQ.push(tmp);
+							moved = true;
 						}
-						inputQ.push(tmp);
-						moved = true;
 					}
 				}
 
@@ -250,8 +260,17 @@ namespace assembler {
 			bx, bxr, bxri,
 
 			c,
-			ca, cal, call,
+			ca, 
+			cal, call,
+			car, carr, carry, carry4,
 			cm, cmp,
+
+			f,
+			fu, ful, full,
+			fl, fla, flag,
+
+			g,
+			ge, gen,
 
 			h,
 			ha, hal, halt,
@@ -267,162 +286,58 @@ namespace assembler {
 
 			n,
 			no, nop,
+			ne, neg,
+
+			o,
+			on, one,
+			ov, ove, over, overf, overfl, overflo, overflow,
 
 			p,
-			po, pop,
+			pc,
+			po, 
+			pop, 
+			pos,
 			pu, pus, push,
 
 			r,
-			re, ret,
+			re, 
+			ret,
+			reg,
 
 			s,
+			sb, sbp,
 			se, set,
 			sh, shi, shif, shift,
 			shiftl, shiftli, shiftr, shiftri,
 			st,
+			sta, stac, stack,
 			su, sub, subc, subi,
 
+			S,
+			S1, S16, S16L,
+			S8, S8H, S8L,
+
+			z,
+			ze, zer, zero,
 
 			//===================================================================================
-
 
 			_percent_,
 
-			_percent_f,
-			_percent_fl, _percent_fla, _percent_flag,
-			_percent_fu, _percent_ful, _percent_full,
-
-			_percent_g,
-			_percent_ge, _percent_gen,
-
-			_percent_gen_openbrack_,
-			_percent_gen_openbrack_0, _percent_gen_openbrack_0_closebrack_,
-			_percent_gen_openbrack_1, _percent_gen_openbrack_1_closebrack_,
-			_percent_gen_openbrack_2, _percent_gen_openbrack_2_closebrack_,
-			_percent_gen_openbrack_3, _percent_gen_openbrack_3_closebrack_,
-			_percent_gen_openbrack_4, _percent_gen_openbrack_4_closebrack_,
-			_percent_gen_openbrack_5, _percent_gen_openbrack_5_closebrack_,
-			_percent_gen_openbrack_6, _percent_gen_openbrack_6_closebrack_,
-			_percent_gen_openbrack_7, _percent_gen_openbrack_7_closebrack_,
-			_percent_gen_openbrack_8, _percent_gen_openbrack_8_closebrack_,
-			_percent_gen_openbrack_9, _percent_gen_openbrack_9_closebrack_,
-			_percent_gen_openbrack_10, _percent_gen_openbrack_10_closebrack_,
-			_percent_gen_openbrack_11, _percent_gen_openbrack_11_closebrack_,
-			_percent_gen_openbrack_12, _percent_gen_openbrack_12_closebrack_,
-			_percent_gen_openbrack_13, _percent_gen_openbrack_13_closebrack_,
-			_percent_gen_openbrack_14, _percent_gen_openbrack_14_closebrack_,
-			_percent_gen_openbrack_15, _percent_gen_openbrack_15_closebrack_,
-			_percent_gen_openbrack_16, _percent_gen_openbrack_16_closebrack_,
-			_percent_gen_openbrack_17, _percent_gen_openbrack_17_closebrack_,
-			_percent_gen_openbrack_18, _percent_gen_openbrack_18_closebrack_,
-			_percent_gen_openbrack_19, _percent_gen_openbrack_19_closebrack_,
-			_percent_gen_openbrack_20, _percent_gen_openbrack_20_closebrack_,
-			_percent_gen_openbrack_21, _percent_gen_openbrack_21_closebrack_,
-			_percent_gen_openbrack_22, _percent_gen_openbrack_22_closebrack_,
-			_percent_gen_openbrack_23, _percent_gen_openbrack_23_closebrack_,
-			_percent_gen_openbrack_24, _percent_gen_openbrack_24_closebrack_,
-
-			_percent_o,
-			_percent_on, _percent_one,
-
-			_percent_p,
-			_percent_pc,
-
-			_percent_s,
-			_percent_sb, _percent_sbp,
-			_percent_st, _percent_sta, _percent_stac, _percent_stack,
-
-			_percent_z,
-			_percent_ze, _percent_zer, _percent_zero,
-
-
-			//===================================================================================
-
-
 			_dot_,
-
-			_dot_1,
-			_dot_16, _dot_16H, _dot_16L,
-
-			_dot_3,
-			_dot_32,
-
-			_dot_8,
-			_dot_8H, _dot_8L,
 
 			_dot_b,
 			_dot_bs, _dot_bss,
 
-			_dot_c,
-			_dot_ca, _dot_car, _dot_carr, _dot_carry, _dot_carry4,
-
 			_dot_d,
 			_dot_da, _dot_dat, _dot_data,
 
-			_dot_f,
-			_dot_fu, _dot_ful, _dot_full,
-			_dot_fl, _dot_fla, _dot_flag,
-
-			_dot_g,
-			_dot_ge, _dot_gen,
-
-			_dot_gen_openbrack_,
-			_dot_gen_openbrack_0, _dot_gen_openbrack_0_closebrack_,
-			_dot_gen_openbrack_1, _dot_gen_openbrack_1_closebrack_,
-			_dot_gen_openbrack_2, _dot_gen_openbrack_2_closebrack_,
-			_dot_gen_openbrack_3, _dot_gen_openbrack_3_closebrack_,
-			_dot_gen_openbrack_4, _dot_gen_openbrack_4_closebrack_,
-			_dot_gen_openbrack_5, _dot_gen_openbrack_5_closebrack_,
-			_dot_gen_openbrack_6, _dot_gen_openbrack_6_closebrack_,
-			_dot_gen_openbrack_7, _dot_gen_openbrack_7_closebrack_,
-			_dot_gen_openbrack_8, _dot_gen_openbrack_8_closebrack_,
-			_dot_gen_openbrack_9, _dot_gen_openbrack_9_closebrack_,
-			_dot_gen_openbrack_10, _dot_gen_openbrack_10_closebrack_,
-			_dot_gen_openbrack_11, _dot_gen_openbrack_11_closebrack_,
-			_dot_gen_openbrack_12, _dot_gen_openbrack_12_closebrack_,
-			_dot_gen_openbrack_13, _dot_gen_openbrack_13_closebrack_,
-			_dot_gen_openbrack_14, _dot_gen_openbrack_14_closebrack_,
-			_dot_gen_openbrack_15, _dot_gen_openbrack_15_closebrack_,
-			_dot_gen_openbrack_16, _dot_gen_openbrack_16_closebrack_,
-			_dot_gen_openbrack_17, _dot_gen_openbrack_17_closebrack_,
-			_dot_gen_openbrack_18, _dot_gen_openbrack_18_closebrack_,
-			_dot_gen_openbrack_19, _dot_gen_openbrack_19_closebrack_,
-			_dot_gen_openbrack_20, _dot_gen_openbrack_20_closebrack_,
-			_dot_gen_openbrack_21, _dot_gen_openbrack_21_closebrack_,
-			_dot_gen_openbrack_22, _dot_gen_openbrack_22_closebrack_,
-			_dot_gen_openbrack_23, _dot_gen_openbrack_23_closebrack_,
-			_dot_gen_openbrack_24, _dot_gen_openbrack_24_closebrack_,
-
-			_dot_n,
-			_dot_ne, _dot_neg,
-
-			_dot_o,
-			_dot_on, _dot_one,
-			_dot_ov, _dot_ove, _dot_over, _dot_overf, _dot_overfl, _dot_overflo, _dot_overflow,
-
-			_dot_p,
-			_dot_pc,
-			_dot_po, _dot_pos,
-
-			_dot_s,
-			_dot_sb, _dot_sbp,
-			_dot_st, _dot_sta, _dot_stac, _dot_stack,
-			_dot_S,
-			_dot_S1, _dot_S16, _dot_S16L,
-			_dot_S8, _dot_S8H, _dot_S8L,
-
 			_dot_t, _dot_te, _dot_tex, _dot_text,
 
-			_dot_z,
-			_dot_ze, _dot_zer, _dot_zero,
-
-
-			//===================================================================================
-
-
 			_openparen_, _closeparen_,
+			_openbrack_, _closebrack_,
 
-			_colon_, _semicolon_,
+			_colon_,
 
 			_plus_, _minus_,
 			_star_, _star_star_, _slash_,
@@ -436,10 +351,17 @@ namespace assembler {
 			__firstnum__,
 			__hexnum__, __decnum__, __octnum__, __binnum__,
 
-			__InterTreeEpsilonID__,
-			__InterTreeEpsilonUK__,
-			__KeyTreeEpsilonID__,
-			__KeyTreeEpsilonUK__,
+			_1_,
+			_16_, _16H_, _16L_,
+
+			_3_,
+			_32_, _32B_,
+
+			_8_,
+			_8H_, _8L_,
+
+			__commentline__, 
+			__commentrange_comment__, __commentrange_end1__, __commentrange_end2__,
 
 			__identifier__,
 
@@ -462,13 +384,22 @@ namespace assembler {
 			{S::bx, false}, {S::bxr, false}, {S::bxri, false},
 
 			{S::c, false},
-			{S::ca, false}, {S::cal, false}, {S::call, false},
+			{S::ca, false},
+			{S::cal, false}, {S::call, false},
+			{S::car, false}, {S::carr, false}, {S::carry, false}, {S::carry4, false},
 			{S::cm, false}, {S::cmp, false},
+
+			{S::f, false},
+			{S::fu, false}, {S::ful, false}, {S::full, false},
+			{S::fl, false}, {S::fla, false}, {S::flag, false},
+
+			{S::g, false},
+			{S::ge, false}, {S::gen, false},
 
 			{S::h, false},
 			{S::ha, false}, {S::hal, false}, {S::halt, false},
-				
-			{S::j, false}, 
+
+			{S::j, false},
 			{S::jm, false}, {S::jmp, false},
 
 			{S::l, false},
@@ -479,162 +410,82 @@ namespace assembler {
 
 			{S::n, false},
 			{S::no, false}, {S::nop, false},
+			{S::ne, false}, {S::neg, false},
+
+			{S::o, false},
+			{S::on, false}, {S::one, false},
+			{S::ov, false}, {S::ove, false}, {S::over, false}, {S::overf, false}, {S::overfl, false}, {S::overflo, false}, {S::overflow, false},
 
 			{S::p, false},
-			{S::po, false}, {S::pop, false},
+			{S::pc, false},
+			{S::po, false},
+			{S::pop, false},
+			{S::pos, false},
 			{S::pu, false}, {S::pus, false}, {S::push, false},
 
-			{S::r, false}, 
-			{S::re, false}, {S::ret, false},
-			
+			{S::r, false},
+			{S::re, false},
+			{S::ret, false},
+			{S::reg, false},
+
 			{S::s, false},
+			{S::sb, false}, {S::sbp, false},
 			{S::se, false}, {S::set, false},
 			{S::sh, false}, {S::shi, false}, {S::shif, false}, {S::shift, false},
 			{S::shiftl, false}, {S::shiftli, false}, {S::shiftr, false}, {S::shiftri, false},
 			{S::st, false},
+			{S::sta, false}, {S::stac, false}, {S::stack, false},
 			{S::su, false}, {S::sub, false}, {S::subc, false}, {S::subi, false},
+
+			{S::S, false},
+			{S::S1, false}, {S::S16, false}, {S::S16L, false},
+			{S::S8, false}, {S::S8H, false}, {S::S8L, false},
+
+			{S::z, false},
+			{S::ze, false}, {S::zer, false}, {S::zero, false},
+
+			//===================================================================================
+
+			{S::_percent_, false},
 
 			{S::_dot_, false},
 
-			{S::_dot_1, false},
-			{S::_dot_16, false}, {S::_dot_16H, false}, {S::_dot_16L, false},
-
-			{S::_dot_3, false},
-			{S::_dot_32, false},
-
-			{S::_dot_8, false}, {S::_dot_8H, false}, {S::_dot_8L, false},
-
-			{S::_dot_b, false}, {S::_dot_bs, false}, {S::_dot_bss, false},
-			
-			{S::_dot_c, false},
-			{S::_dot_ca, false}, {S::_dot_car, false}, {S::_dot_carr, false}, {S::_dot_carry, false}, {S::_dot_carry4, false},
+			{S::_dot_b, false},
+			{S::_dot_bs, false}, {S::_dot_bss, false},
 
 			{S::_dot_d, false},
 			{S::_dot_da, false}, {S::_dot_dat, false}, {S::_dot_data, false},
 
-			{S::_dot_f, false},	
-			{S::_dot_fu, false}, {S::_dot_ful, false}, {S::_dot_full, false},
-			{S::_dot_fl, false}, {S::_dot_fla, false}, {S::_dot_flag, false},
-
-			{S::_dot_g, false},
-			{S::_dot_ge, false}, {S::_dot_gen, false}, {S::_dot_gen_openbrack_, false},
-			{S::_dot_gen_openbrack_0, false}, {S::_dot_gen_openbrack_0_closebrack_, false},
-			{S::_dot_gen_openbrack_1, false}, {S::_dot_gen_openbrack_1_closebrack_, false},
-			{S::_dot_gen_openbrack_2, false}, {S::_dot_gen_openbrack_2_closebrack_, false},
-			{S::_dot_gen_openbrack_3, false}, {S::_dot_gen_openbrack_3_closebrack_, false},
-			{S::_dot_gen_openbrack_4, false}, {S::_dot_gen_openbrack_4_closebrack_, false},
-			{S::_dot_gen_openbrack_5, false}, {S::_dot_gen_openbrack_5_closebrack_, false},
-			{S::_dot_gen_openbrack_6, false}, {S::_dot_gen_openbrack_6_closebrack_, false},
-			{S::_dot_gen_openbrack_7, false}, {S::_dot_gen_openbrack_7_closebrack_, false},
-			{S::_dot_gen_openbrack_8, false}, {S::_dot_gen_openbrack_8_closebrack_, false},
-			{S::_dot_gen_openbrack_9, false}, {S::_dot_gen_openbrack_9_closebrack_, false},
-			{S::_dot_gen_openbrack_10, false}, {S::_dot_gen_openbrack_10_closebrack_, false},
-			{S::_dot_gen_openbrack_11, false}, {S::_dot_gen_openbrack_11_closebrack_, false},
-			{S::_dot_gen_openbrack_12, false}, {S::_dot_gen_openbrack_12_closebrack_, false},
-			{S::_dot_gen_openbrack_13, false}, {S::_dot_gen_openbrack_13_closebrack_, false},
-			{S::_dot_gen_openbrack_14, false}, {S::_dot_gen_openbrack_14_closebrack_, false},
-			{S::_dot_gen_openbrack_15, false}, {S::_dot_gen_openbrack_15_closebrack_, false},
-			{S::_dot_gen_openbrack_16, false}, {S::_dot_gen_openbrack_16_closebrack_, false},
-			{S::_dot_gen_openbrack_17, false}, {S::_dot_gen_openbrack_17_closebrack_, false},
-			{S::_dot_gen_openbrack_18, false}, {S::_dot_gen_openbrack_18_closebrack_, false},
-			{S::_dot_gen_openbrack_19, false}, {S::_dot_gen_openbrack_19_closebrack_, false},
-			{S::_dot_gen_openbrack_20, false}, {S::_dot_gen_openbrack_20_closebrack_, false},
-			{S::_dot_gen_openbrack_21, false}, {S::_dot_gen_openbrack_21_closebrack_, false},
-			{S::_dot_gen_openbrack_22, false}, {S::_dot_gen_openbrack_22_closebrack_, false},
-			{S::_dot_gen_openbrack_23, false}, {S::_dot_gen_openbrack_23_closebrack_, false},
-			{S::_dot_gen_openbrack_24, false}, {S::_dot_gen_openbrack_24_closebrack_, false},
-
-			{S::_dot_n, false},
-			{S::_dot_ne, false}, {S::_dot_neg, false},
-
-			{S::_dot_o, false},
-			{S::_dot_on, false}, {S::_dot_one, false},
-			{S::_dot_ov, false}, {S::_dot_ove, false}, {S::_dot_over, false}, {S::_dot_overf, false}, 
-			{S::_dot_overfl, false}, {S::_dot_overflo, false}, {S::_dot_overflow, false},
-
-			{S::_dot_p, false},
-			{S::_dot_pc, false},
-			{S::_dot_po, false}, {S::_dot_pos, false},
-
-			{S::_dot_s, false},
-			{S::_dot_sb, false}, {S::_dot_sbp, false},
-			{S::_dot_st, false}, {S::_dot_sta, false}, {S::_dot_stac, false}, {S::_dot_stack, false},
-			{S::_dot_S1, false}, {S::_dot_S16, false}, {S::_dot_S16L, false},
-			{S::_dot_S8, false}, {S::_dot_S8H, false}, {S::_dot_S8L, false},
-
-			{S::_dot_t, false},
-			{S::_dot_te, false}, {S::_dot_tex, false}, {S::_dot_text, false},
-
-			{S::_dot_z, false}, 
-			{S::_dot_ze, false}, {S::_dot_zer, false}, {S::_dot_zero, false},
-
-			{ S::_percent_, false },
-
-			{ S::_percent_f, false },
-			{ S::_percent_fl, false }, { S::_percent_fla, false }, { S::_percent_flag, false },
-			{ S::_percent_fu, false }, { S::_percent_ful, false }, { S::_percent_full, false },
-
-			{ S::_percent_g, false },
-			{ S::_percent_ge, false }, { S::_percent_gen, false },
-
-			{ S::_percent_gen_openbrack_, false },
-			{ S::_percent_gen_openbrack_0, false }, { S::_percent_gen_openbrack_0_closebrack_, false },
-			{ S::_percent_gen_openbrack_1, false }, { S::_percent_gen_openbrack_1_closebrack_, false },
-			{ S::_percent_gen_openbrack_2, false }, { S::_percent_gen_openbrack_2_closebrack_, false },
-			{ S::_percent_gen_openbrack_3, false }, { S::_percent_gen_openbrack_3_closebrack_, false },
-			{ S::_percent_gen_openbrack_4, false }, { S::_percent_gen_openbrack_4_closebrack_, false },
-			{ S::_percent_gen_openbrack_5, false }, { S::_percent_gen_openbrack_5_closebrack_, false },
-			{ S::_percent_gen_openbrack_6, false }, { S::_percent_gen_openbrack_6_closebrack_, false },
-			{ S::_percent_gen_openbrack_7, false }, { S::_percent_gen_openbrack_7_closebrack_, false },
-			{ S::_percent_gen_openbrack_8, false }, { S::_percent_gen_openbrack_8_closebrack_, false },
-			{ S::_percent_gen_openbrack_9, false }, { S::_percent_gen_openbrack_9_closebrack_, false },
-			{ S::_percent_gen_openbrack_10, false }, { S::_percent_gen_openbrack_10_closebrack_, false },
-			{ S::_percent_gen_openbrack_11, false }, { S::_percent_gen_openbrack_11_closebrack_, false },
-			{ S::_percent_gen_openbrack_12, false }, { S::_percent_gen_openbrack_12_closebrack_, false },
-			{ S::_percent_gen_openbrack_13, false }, { S::_percent_gen_openbrack_13_closebrack_, false },
-			{ S::_percent_gen_openbrack_14, false }, { S::_percent_gen_openbrack_14_closebrack_, false },
-			{ S::_percent_gen_openbrack_15, false }, { S::_percent_gen_openbrack_15_closebrack_, false },
-			{ S::_percent_gen_openbrack_16, false }, { S::_percent_gen_openbrack_16_closebrack_, false },
-			{ S::_percent_gen_openbrack_17, false }, { S::_percent_gen_openbrack_17_closebrack_, false },
-			{ S::_percent_gen_openbrack_18, false }, { S::_percent_gen_openbrack_18_closebrack_, false },
-			{ S::_percent_gen_openbrack_19, false }, { S::_percent_gen_openbrack_19_closebrack_, false },
-			{ S::_percent_gen_openbrack_20, false }, { S::_percent_gen_openbrack_20_closebrack_, false },
-			{ S::_percent_gen_openbrack_21, false }, { S::_percent_gen_openbrack_21_closebrack_, false },
-			{ S::_percent_gen_openbrack_22, false }, { S::_percent_gen_openbrack_22_closebrack_, false },
-			{ S::_percent_gen_openbrack_23, false }, { S::_percent_gen_openbrack_23_closebrack_, false },
-			{ S::_percent_gen_openbrack_24, false }, { S::_percent_gen_openbrack_24_closebrack_, false },
-
-			{ S::_percent_o, false },
-			{ S::_percent_on, false }, { S::_percent_one, false },
-
-			{ S::_percent_p, false },
-			{ S::_percent_pc, false },
-
-			{ S::_percent_s, false },
-			{ S::_percent_sb, false }, { S::_percent_sbp, false },
-			{ S::_percent_st, false }, { S::_percent_sta, false }, { S::_percent_stac, false }, { S::_percent_stack, false },
-
-			{ S::_percent_z, false },
-			{ S::_percent_ze, false }, { S::_percent_zer, false }, { S::_percent_zero, false },
+			{S::_dot_t, false}, {S::_dot_te, false}, {S::_dot_tex, false}, {S::_dot_text, false},
 
 			{S::_openparen_, false}, {S::_closeparen_, false},
+			{S::_openbrack_, false}, {S::_closebrack_, false},
 
-			{S::_colon_, false}, {S::_semicolon_, false},
+			{S::_colon_, false},
 
 			{S::_plus_, false}, {S::_minus_, false},
 			{S::_star_, false}, {S::_star_star_, false}, {S::_slash_, false},
 			{S::_tilde_, false}, {S::_ampersend_, false}, {S::_verticalbar_, false}, {S::_caret_, false},
 
+			{S::_whitespace_, false},
+			{S::_newline_, false},
+
+			//===================================================================================
+
 			{S::__firstnum__, false},
 			{S::__hexnum__, false}, {S::__decnum__, false}, {S::__octnum__, false}, {S::__binnum__, false},
-			
-			{ S::_whitespace_, false },
-			{ S::_newline_, false },
 
-			{S::__InterTreeEpsilonID__, false},
-			{S::__InterTreeEpsilonUK__, false},
-			{S::__KeyTreeEpsilonID__, false},
-			{S::__KeyTreeEpsilonUK__, false},
+			{ S::_1_, false },
+			{ S::_16_, false }, { S::_16H_, false }, { S::_16L_, false },
+
+			{ S::_3_, false },
+			{ S::_32_, false }, { S::_32B_, false },
+
+			{ S::_8_, false },
+			{ S::_8H_, false }, { S::_8L_, false },
+
+			{S::__commentline__, false},
+			{S::__commentrange_comment__, false}, {S::__commentrange_end1__, false}, {S::__commentrange_end2__, false},
 
 			{S::__identifier__, false},
 
@@ -642,17 +493,31 @@ namespace assembler {
 			},
 
 			{
+			{S::__start__, S::_1_, {true, [](char c)->bool {return c == '1'; }}},
+			{S::__start__, S::_3_, {true, [](char c)->bool {return c == '3'; }}},
+			{S::__start__, S::_8_, {true, [](char c)->bool {return c == '8'; }}},
+
 			{S::__start__, S::a, {true, [](char c)->bool {return c == 'a'; }}},
 			{S::__start__, S::b, {true, [](char c)->bool {return c == 'b'; }}},
 			{S::__start__, S::c, {true, [](char c)->bool {return c == 'c'; }}},
+			{S::__start__, S::f, {true, [](char c)->bool {return c == 'f'; }}},
+			{S::__start__, S::g, {true, [](char c)->bool {return c == 'g'; }}},
 			{S::__start__, S::h, {true, [](char c)->bool {return c == 'h'; }}},
 			{S::__start__, S::j, {true, [](char c)->bool {return c == 'j'; }}},
 			{S::__start__, S::l, {true, [](char c)->bool {return c == 'l'; }}},
 			{S::__start__, S::m, {true, [](char c)->bool {return c == 'm'; }}},
 			{S::__start__, S::n, {true, [](char c)->bool {return c == 'n'; }}},
+			{S::__start__, S::o, {true, [](char c)->bool {return c == 'o'; }}},
 			{S::__start__, S::p, {true, [](char c)->bool {return c == 'p'; }}},
 			{S::__start__, S::r, {true, [](char c)->bool {return c == 'r'; }}},
 			{S::__start__, S::s, {true, [](char c)->bool {return c == 's'; }}},
+			{S::__start__, S::S, {true, [](char c)->bool {return c == 'S'; }}},
+			{S::__start__, S::z, {true, [](char c)->bool {return c == 'z'; }}},
+
+			{S::_1_, S::_16_, {true, [](char c)->bool {return c == '6'; }}},
+			{S::_3_, S::_32_, {true, [](char c)->bool {return c == '2'; }}},
+			{S::_8_, S::_8H_, {true, [](char c)->bool {return c == 'h' || c == 'H'; }}},
+			{S::_8_, S::_8L_, {true, [](char c)->bool {return c == 'l' || c == 'L'; }}},
 
 			{S::a, S::ad, {true, [](char c)->bool {return c == 'd'; }}},
 			{S::b, S::bn, {true, [](char c)->bool {return c == 'n'; }}},
@@ -660,265 +525,117 @@ namespace assembler {
 			{S::b, S::bx, {true, [](char c)->bool {return c == 'x'; }}},
 			{S::c, S::ca, {true, [](char c)->bool {return c == 'a'; }}},
 			{S::c, S::cm, {true, [](char c)->bool {return c == 'm'; }}},
+			{S::f, S::fu, {true, [](char c)->bool {return c == 'u'; }}},
+			{S::f, S::fl, {true, [](char c)->bool {return c == 'l'; }}},
+			{S::g, S::ge, {true, [](char c)->bool {return c == 'e'; }}},
 			{S::h, S::ha, {true, [](char c)->bool {return c == 'a'; }}},
 			{S::j, S::jm, {true, [](char c)->bool {return c == 'm'; }}},
 			{S::l, S::ld, {true, [](char c)->bool {return c == 'd'; }}},
 			{S::m, S::mo, {true, [](char c)->bool {return c == 'o'; }}},
 			{S::n, S::no, {true, [](char c)->bool {return c == 'o'; }}},
+			{S::n, S::ne, {true, [](char c)->bool {return c == 'e'; }}},
+			{S::o, S::on, {true, [](char c)->bool {return c == 'n'; }}},
+			{S::o, S::ov, {true, [](char c)->bool {return c == 'v'; }}},
+			{S::p, S::pc, {true, [](char c)->bool {return c == 'c'; }}},
 			{S::p, S::po, {true, [](char c)->bool {return c == 'o'; }}},
 			{S::p, S::pu, {true, [](char c)->bool {return c == 'u'; }}},
 			{S::r, S::re, {true, [](char c)->bool {return c == 'e'; }}},
+			{S::s, S::sb, {true, [](char c)->bool {return c == 'b'; }}},
 			{S::s, S::se, {true, [](char c)->bool {return c == 'e'; }}},
 			{S::s, S::sh, {true, [](char c)->bool {return c == 'h'; }}},
 			{S::s, S::st, {true, [](char c)->bool {return c == 't'; }}},
 			{S::s, S::su, {true, [](char c)->bool {return c == 'u'; }}},
+			{S::s, S::S1, {true, [](char c)->bool {return c == '1'; }}},
+			{S::s, S::S8, {true, [](char c)->bool {return c == '8'; }}},
+			{S::S, S::S1, {true, [](char c)->bool {return c == '1'; }}},
+			{S::S, S::S8, {true, [](char c)->bool {return c == '8'; }}},
+			{S::z, S::ze, {true, [](char c)->bool {return c == 'e'; }}},
+
+			{S::_32_, S::_32B_, {true, [](char c)->bool {return c == 'b' || c == 'B'; }}},
+			{S::_16_, S::_16H_, {true, [](char c)->bool {return c == 'h' || c == 'H'; }}},
+			{S::_16_, S::_16L_, {true, [](char c)->bool {return c == 'l' || c == 'L'; }}},
 
 			{S::ad, S::add, {true, [](char c)->bool {return c == 'd'; }}},
 			{S::bn, S::bnd, {true, [](char c)->bool {return c == 'd'; }}},
 			{S::bo, S::bor, {true, [](char c)->bool {return c == 'r'; }}},
 			{S::bx, S::bxr, {true, [](char c)->bool {return c == 'r'; }}},
 			{S::ca, S::cal, {true, [](char c)->bool {return c == 'l'; }}},
+			{S::ca, S::car, {true, [](char c)->bool {return c == 'r'; }}},
 			{S::cm, S::cmp, {true, [](char c)->bool {return c == 'p'; }}},
+			{S::fu, S::ful, {true, [](char c)->bool {return c == 'l'; }}},
+			{S::fl, S::fla, {true, [](char c)->bool {return c == 'a'; }}},
+			{S::ge, S::gen, {true, [](char c)->bool {return c == 'n'; }}},
 			{S::ha, S::hal, {true, [](char c)->bool {return c == 'l'; }}},
 			{S::jm, S::jmp, {true, [](char c)->bool {return c == 'p'; }}},
 			{S::mo, S::mov, {true, [](char c)->bool {return c == 'v'; }}},
 			{S::no, S::nop, {true, [](char c)->bool {return c == 'p'; }}},
+			{S::ne, S::neg, {true, [](char c)->bool {return c == 'g'; }}},
+			{S::on, S::one, {true, [](char c)->bool {return c == 'e'; }}},
+			{S::ov, S::ove, {true, [](char c)->bool {return c == 'e'; }}},
 			{S::po, S::pop, {true, [](char c)->bool {return c == 'p'; }}},
+			{S::po, S::pos, {true, [](char c)->bool {return c == 's'; }}},
 			{S::pu, S::pus, {true, [](char c)->bool {return c == 's'; }}},
 			{S::re, S::ret, {true, [](char c)->bool {return c == 't'; }}},
+			{S::re, S::reg, {true, [](char c)->bool {return c == 'g'; }}},
+			{S::sb, S::sbp, {true, [](char c)->bool {return c == 'p'; }}},
 			{S::se, S::set, {true, [](char c)->bool {return c == 't'; }}},
 			{S::sh, S::shi, {true, [](char c)->bool {return c == 'i'; }}},
+			{S::st, S::sta, {true, [](char c)->bool {return c == 'a'; }}},
 			{S::su, S::sub, {true, [](char c)->bool {return c == 'b'; }}},
+			{S::S1, S::S16, {true, [](char c)->bool {return c == '6'; }}},
+			{S::S8, S::S8H, {true, [](char c)->bool {return c == 'h' || c == 'H'; }}},
+			{S::S8, S::S8L, {true, [](char c)->bool {return c == 'l' || c == 'L'; }}},
+			{S::ze, S::zer, {true, [](char c)->bool {return c == 'r'; }}},
 
 			{S::add, S::addc, {true, [](char c)->bool {return c == 'c'; }}},
 			{S::add, S::addi, {true, [](char c)->bool {return c == 'i'; }}},
 			{S::bnd, S::bndi, {true, [](char c)->bool {return c == 'i'; }}},
 			{S::bor, S::bori, {true, [](char c)->bool {return c == 'i'; }}},
 			{S::bxr, S::bxri, {true, [](char c)->bool {return c == 'i'; }}},
-			{S::cal, S::call, {true, [](char c)->bool {return c == 'i'; }}},
+			{S::cal, S::call, {true, [](char c)->bool {return c == 'l'; }}},
+			{S::car, S::carr, {true, [](char c)->bool {return c == 'r'; }}},
 			{S::hal, S::halt, {true, [](char c)->bool {return c == 't'; }}},
+			{S::ove, S::over, {true, [](char c)->bool {return c == 'r'; }}},
 			{S::pus, S::push, {true, [](char c)->bool {return c == 'h'; }}},
 			{S::shi, S::shif, {true, [](char c)->bool {return c == 'f'; }}},
+			{S::sta, S::stac, {true, [](char c)->bool {return c == 'c'; }}},
 			{S::sub, S::subc, {true, [](char c)->bool {return c == 'c'; }}},
 			{S::sub, S::subi, {true, [](char c)->bool {return c == 'i'; }}},
-
+			{S::zer, S::zero, {true, [](char c)->bool {return c == 'o'; }}},
+			
+			{S::over, S::overf, {true, [](char c)->bool {return c == 'f'; }}},
 			{S::shif, S::shift, {true, [](char c)->bool {return c == 't'; }}},
-
+			{S::stac, S::stack, {true, [](char c)->bool {return c == 'k'; }}},
+			
+			{S::overf, S::overfl, {true, [](char c)->bool {return c == 'l'; }}},
 			{S::shift, S::shiftl, {true, [](char c)->bool {return c == 'l'; }}},
 			{S::shift, S::shiftr, {true, [](char c)->bool {return c == 'r'; }}},
-
+			
+			{S::overfl, S::overflo, {true, [](char c)->bool {return c == 'o'; }}},
 			{S::shiftl, S::shiftli, {true, [](char c)->bool {return c == 'i'; }}},
 			{S::shiftr, S::shiftri, {true, [](char c)->bool {return c == 'i'; }}},
+				
+			{S::overflo, S::overflow, {true, [](char c)->bool {return c == 'w'; }}},
 
 			{S::__start__, S::_dot_, {true , [](char c)->bool {return c == '.'; }}},
 			
-			{S::_dot_, S::_dot_1, {true , [](char c)->bool {return c == '1'; }}},
-			{S::_dot_, S::_dot_3, {true , [](char c)->bool {return c == '3'; }}},
-			{S::_dot_, S::_dot_8, {true , [](char c)->bool {return c == '8'; }}},
+			
 			{S::_dot_, S::_dot_b, {true , [](char c)->bool {return c == 'b'; }}},
-			{S::_dot_, S::_dot_c, {true , [](char c)->bool {return c == 'c'; }}},
 			{S::_dot_, S::_dot_d, {true , [](char c)->bool {return c == 'd'; }}},
-			{S::_dot_, S::_dot_f, {true , [](char c)->bool {return c == 'f'; }}},
-			{S::_dot_, S::_dot_g, {true , [](char c)->bool {return c == 'g'; }}},
-			{S::_dot_, S::_dot_n, {true , [](char c)->bool {return c == 'n'; }}},
-			{S::_dot_, S::_dot_o, {true , [](char c)->bool {return c == 'o'; }}},
-			{S::_dot_, S::_dot_p, {true , [](char c)->bool {return c == 'p'; }}},
-			{S::_dot_, S::_dot_s, {true , [](char c)->bool {return c == 's'; }}},
-			{S::_dot_, S::_dot_S, {true , [](char c)->bool {return c == 'S'; }}},
 			{S::_dot_, S::_dot_t, {true , [](char c)->bool {return c == 't'; }}},
-			{S::_dot_, S::_dot_z, {true , [](char c)->bool {return c == 'z'; }}},
 
-			{ S::_dot_1, S::_dot_16, {true , [](char c)->bool {return c == '6'; }} },
-			{ S::_dot_3, S::_dot_32, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_dot_8, S::_dot_8H, {true , [](char c)->bool {return c == 'h' || c == 'H'; }} },
-			{ S::_dot_8, S::_dot_8L, {true , [](char c)->bool {return c == 'l' || c == 'L'; }} },
+			{ S::_dot_b, S::_dot_bs, {true , [](char c)->bool {return c == 's'; }} },
 			{ S::_dot_d, S::_dot_da, {true , [](char c)->bool {return c == 'a'; }} },
-			{ S::_dot_f, S::_dot_fl, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_dot_f, S::_dot_fu, {true , [](char c)->bool {return c == 'u'; }} },
-			{ S::_dot_g, S::_dot_ge, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_dot_n, S::_dot_ne, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_dot_o, S::_dot_on, {true , [](char c)->bool {return c == 'n'; }} },
-			{ S::_dot_o, S::_dot_ov, {true , [](char c)->bool {return c == 'v'; }} },
-			{ S::_dot_p, S::_dot_pc, {true , [](char c)->bool {return c == 'c'; }} },
-			{ S::_dot_p, S::_dot_po, {true , [](char c)->bool {return c == 'o'; }} },
-			{ S::_dot_s, S::_dot_sb, {true , [](char c)->bool {return c == 'b'; }} },
-			{ S::_dot_s, S::_dot_st, {true , [](char c)->bool {return c == 't'; }} },
-			{ S::_dot_s, S::_dot_S1, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_dot_S, S::_dot_S1, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_dot_s, S::_dot_S8, {true , [](char c)->bool {return c == '8'; }} },
-			{ S::_dot_S, S::_dot_S8, {true , [](char c)->bool {return c == '8'; }} },
 			{ S::_dot_t, S::_dot_te, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_dot_z, S::_dot_ze, {true , [](char c)->bool {return c == 'e'; }} },
 
-			{ S::_dot_16, S::_dot_16L, {true , [](char c)->bool {return c == 'l' || c == 'L'; }} },
-			{ S::_dot_16, S::_dot_16H, {true , [](char c)->bool {return c == 'h' || c == 'H'; }} },
+			{ S::_dot_b, S::_dot_bss, {true , [](char c)->bool {return c == 's'; }} },
 			{ S::_dot_da, S::_dot_dat, {true , [](char c)->bool {return c == 't'; }} },
-			{ S::_dot_fl, S::_dot_fla, {true , [](char c)->bool {return c == 'a'; }} },
-			{ S::_dot_fu, S::_dot_ful, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_dot_ge, S::_dot_gen, {true , [](char c)->bool {return c == 'n'; }} },
-			{ S::_dot_ne, S::_dot_neg, {true , [](char c)->bool {return c == 'g'; }} },
-			{ S::_dot_on, S::_dot_one, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_dot_ov, S::_dot_ove, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_dot_po, S::_dot_pos, {true , [](char c)->bool {return c == 's'; }} },
-			{ S::_dot_sb, S::_dot_sbp, {true , [](char c)->bool {return c == 'p'; }} },
-			{ S::_dot_st, S::_dot_sta, {true , [](char c)->bool {return c == 'a'; }} },
-			{ S::_dot_S1, S::_dot_S16, {true , [](char c)->bool {return c == '6'; }} },
 			{ S::_dot_te, S::_dot_tex, {true , [](char c)->bool {return c == 'x'; }} },
-			{ S::_dot_ze, S::_dot_zer, {true , [](char c)->bool {return c == 'r'; }} },
 
 			{ S::_dot_dat, S::_dot_data, {true , [](char c)->bool {return c == 'a'; }} },
-			{ S::_dot_fla, S::_dot_flag, {true , [](char c)->bool {return c == 'g'; }} },
-			{ S::_dot_ful, S::_dot_full, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_dot_gen, S::_dot_gen_openbrack_, {true , [](char c)->bool {return c == '['; }} },
-			{ S::_dot_ove, S::_dot_over, {true , [](char c)->bool {return c == 'r'; }} },
-			{ S::_dot_sta, S::_dot_stac, {true , [](char c)->bool {return c == 'c'; }} },
-			{ S::_dot_S16, S::_dot_S16L, {true , [](char c)->bool {return c == 'l' || c == 'L'; }} },
 			{ S::_dot_tex, S::_dot_text, {true , [](char c)->bool {return c == 't'; }} },
-			{ S::_dot_zer, S::_dot_zero, {true , [](char c)->bool {return c == 'o'; }} },
-
-			{ S::_dot_over, S::_dot_overf, {true , [](char c)->bool {return c == 'f'; }} },
-			{ S::_dot_overf, S::_dot_overfl, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_dot_overfl, S::_dot_overflo, {true , [](char c)->bool {return c == 'o'; }} },
-			{ S::_dot_overflo, S::_dot_overflow, {true , [](char c)->bool {return c == 'w'; }} },
-			{ S::_dot_stac, S::_dot_stack, {true , [](char c)->bool {return c == 'k'; }} },
-
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_0, {true , [](char c)->bool {return c == '0'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_1, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_2, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_3, {true , [](char c)->bool {return c == '3'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_4, {true , [](char c)->bool {return c == '4'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_5, {true , [](char c)->bool {return c == '5'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_6, {true , [](char c)->bool {return c == '6'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_7, {true , [](char c)->bool {return c == '7'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_8, {true , [](char c)->bool {return c == '8'; }} },
-			{ S::_dot_gen_openbrack_, S::_dot_gen_openbrack_9, {true , [](char c)->bool {return c == '9'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_10, {true , [](char c)->bool {return c == '0'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_11, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_12, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_13, {true , [](char c)->bool {return c == '3'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_14, {true , [](char c)->bool {return c == '4'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_15, {true , [](char c)->bool {return c == '5'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_16, {true , [](char c)->bool {return c == '6'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_17, {true , [](char c)->bool {return c == '7'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_18, {true , [](char c)->bool {return c == '8'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_19, {true , [](char c)->bool {return c == '9'; }} },
-			{ S::_dot_gen_openbrack_2, S::_dot_gen_openbrack_20, {true , [](char c)->bool {return c == '0'; }} },
-			{ S::_dot_gen_openbrack_2, S::_dot_gen_openbrack_21, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_dot_gen_openbrack_2, S::_dot_gen_openbrack_22, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_dot_gen_openbrack_2, S::_dot_gen_openbrack_23, {true , [](char c)->bool {return c == '3'; }} },
-			{ S::_dot_gen_openbrack_2, S::_dot_gen_openbrack_24, {true , [](char c)->bool {return c == '4'; }} },
-
-			{ S::_dot_gen_openbrack_0, S::_dot_gen_openbrack_0_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_1, S::_dot_gen_openbrack_1_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_2, S::_dot_gen_openbrack_2_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_3, S::_dot_gen_openbrack_3_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_4, S::_dot_gen_openbrack_4_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_5, S::_dot_gen_openbrack_5_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_6, S::_dot_gen_openbrack_6_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_7, S::_dot_gen_openbrack_7_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_8, S::_dot_gen_openbrack_8_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_9, S::_dot_gen_openbrack_9_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_10, S::_dot_gen_openbrack_10_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_11, S::_dot_gen_openbrack_11_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_12, S::_dot_gen_openbrack_12_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_13, S::_dot_gen_openbrack_13_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_14, S::_dot_gen_openbrack_14_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_15, S::_dot_gen_openbrack_15_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_16, S::_dot_gen_openbrack_16_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_17, S::_dot_gen_openbrack_17_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_18, S::_dot_gen_openbrack_18_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_19, S::_dot_gen_openbrack_19_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_20, S::_dot_gen_openbrack_20_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_21, S::_dot_gen_openbrack_21_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_22, S::_dot_gen_openbrack_22_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_23, S::_dot_gen_openbrack_23_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_dot_gen_openbrack_24, S::_dot_gen_openbrack_24_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
 
 			{ S::__start__, S::_percent_, {true , [](char c)->bool {return c == '%'; }} },
-
-			{ S::_percent_, S::_percent_f, {true , [](char c)->bool {return c == 'f'; }} },
-			{ S::_percent_, S::_percent_g, {true , [](char c)->bool {return c == 'g'; }} },
-			{ S::_percent_, S::_percent_o, {true , [](char c)->bool {return c == 'o'; }} },
-			{ S::_percent_, S::_percent_p, {true , [](char c)->bool {return c == 'p'; }} },
-			{ S::_percent_, S::_percent_s, {true , [](char c)->bool {return c == 's'; }} },
-			{ S::_percent_, S::_percent_z, {true , [](char c)->bool {return c == 'z'; }} },
-
-			{ S::_percent_f, S::_percent_fl, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_percent_f, S::_percent_fu, {true , [](char c)->bool {return c == 'u'; }} },
-			{ S::_percent_g, S::_percent_ge, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_percent_o, S::_percent_on, {true , [](char c)->bool {return c == 'n'; }} },
-			{ S::_percent_p, S::_percent_pc, {true , [](char c)->bool {return c == 'c'; }} },
-			{ S::_percent_s, S::_percent_sb, {true , [](char c)->bool {return c == 'b'; }} },
-			{ S::_percent_s, S::_percent_st, {true , [](char c)->bool {return c == 't'; }} },
-			{ S::_percent_z, S::_percent_ze, {true , [](char c)->bool {return c == 'e'; }} },
-
-			{ S::_percent_fl, S::_percent_fla, {true , [](char c)->bool {return c == 'a'; }} },
-			{ S::_percent_fu, S::_percent_ful, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_percent_ge, S::_percent_gen, {true , [](char c)->bool {return c == 'n'; }} },
-			{ S::_percent_on, S::_percent_one, {true , [](char c)->bool {return c == 'e'; }} },
-			{ S::_percent_st, S::_percent_sta, {true , [](char c)->bool {return c == 'a'; }} },
-			{ S::_percent_sb, S::_percent_sbp, {true , [](char c)->bool {return c == 'p'; }} },
-			{ S::_percent_ze, S::_percent_zer, {true , [](char c)->bool {return c == 'r'; }} },
-
-			{ S::_percent_fla, S::_percent_flag, {true , [](char c)->bool {return c == 'g'; }} },
-			{ S::_percent_ful, S::_percent_full, {true , [](char c)->bool {return c == 'l'; }} },
-			{ S::_percent_gen, S::_percent_gen_openbrack_, {true , [](char c)->bool {return c == '['; }} },
-			{ S::_percent_sta, S::_percent_stac, {true , [](char c)->bool {return c == 'c'; }} },
-			{ S::_percent_zer, S::_percent_zero, {true , [](char c)->bool {return c == 'o'; }} },
-
-			{ S::_percent_stac, S::_percent_stack, {true , [](char c)->bool {return c == 'k'; }} },
-
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_0, {true , [](char c)->bool {return c == '0'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_1, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_2, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_3, {true , [](char c)->bool {return c == '3'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_4, {true , [](char c)->bool {return c == '4'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_5, {true , [](char c)->bool {return c == '5'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_6, {true , [](char c)->bool {return c == '6'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_7, {true , [](char c)->bool {return c == '7'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_8, {true , [](char c)->bool {return c == '8'; }} },
-			{ S::_percent_gen_openbrack_, S::_percent_gen_openbrack_9, {true , [](char c)->bool {return c == '9'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_10, {true , [](char c)->bool {return c == '0'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_11, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_12, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_13, {true , [](char c)->bool {return c == '3'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_14, {true , [](char c)->bool {return c == '4'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_15, {true , [](char c)->bool {return c == '5'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_16, {true , [](char c)->bool {return c == '6'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_17, {true , [](char c)->bool {return c == '7'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_18, {true , [](char c)->bool {return c == '8'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_19, {true , [](char c)->bool {return c == '9'; }} },
-			{ S::_percent_gen_openbrack_2, S::_percent_gen_openbrack_20, {true , [](char c)->bool {return c == '0'; }} },
-			{ S::_percent_gen_openbrack_2, S::_percent_gen_openbrack_21, {true , [](char c)->bool {return c == '1'; }} },
-			{ S::_percent_gen_openbrack_2, S::_percent_gen_openbrack_22, {true , [](char c)->bool {return c == '2'; }} },
-			{ S::_percent_gen_openbrack_2, S::_percent_gen_openbrack_23, {true , [](char c)->bool {return c == '3'; }} },
-			{ S::_percent_gen_openbrack_2, S::_percent_gen_openbrack_24, {true , [](char c)->bool {return c == '4'; }} },
-
-			{ S::_percent_gen_openbrack_0, S::_percent_gen_openbrack_0_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_1, S::_percent_gen_openbrack_1_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_2, S::_percent_gen_openbrack_2_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_3, S::_percent_gen_openbrack_3_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_4, S::_percent_gen_openbrack_4_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_5, S::_percent_gen_openbrack_5_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_6, S::_percent_gen_openbrack_6_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_7, S::_percent_gen_openbrack_7_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_8, S::_percent_gen_openbrack_8_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_9, S::_percent_gen_openbrack_9_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_10, S::_percent_gen_openbrack_10_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_11, S::_percent_gen_openbrack_11_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_12, S::_percent_gen_openbrack_12_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_13, S::_percent_gen_openbrack_13_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_14, S::_percent_gen_openbrack_14_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_15, S::_percent_gen_openbrack_15_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_16, S::_percent_gen_openbrack_16_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_17, S::_percent_gen_openbrack_17_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_18, S::_percent_gen_openbrack_18_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_19, S::_percent_gen_openbrack_19_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_20, S::_percent_gen_openbrack_20_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_21, S::_percent_gen_openbrack_21_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_22, S::_percent_gen_openbrack_22_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_23, S::_percent_gen_openbrack_23_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
-			{ S::_percent_gen_openbrack_24, S::_percent_gen_openbrack_24_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
 
 			{ S::__start__, S::__firstnum__, {true , [](char c)->bool {return '0' <= c && c <= '9'; }}},
 			{ S::__firstnum__, S::__hexnum__, {true , [](char c)->bool {return c == 'x' || c == 'X'; }}},
@@ -933,8 +650,10 @@ namespace assembler {
 
 			{ S::__start__, S::_openparen_, {true , [](char c)->bool {return c == '('; }} },
 			{ S::__start__, S::_closeparen_, {true , [](char c)->bool {return c == ')'; }} },
+			{ S::__start__, S::_openbrack_, {true , [](char c)->bool {return c == '['; }} },
+			{ S::__start__, S::_closebrack_, {true , [](char c)->bool {return c == ']'; }} },
+
 			{ S::__start__, S::_colon_, {true , [](char c)->bool {return c == ':'; }} },
-			{ S::__start__, S::_semicolon_, {true , [](char c)->bool {return c == ';'; }} },
 			{ S::__start__, S::_plus_, {true , [](char c)->bool {return c == '+'; }} },
 			{ S::__start__, S::_minus_, {true , [](char c)->bool {return c == '-'; }} },
 			{ S::__start__, S::_star_, {true , [](char c)->bool {return c == '*'; }} },
@@ -944,196 +663,22 @@ namespace assembler {
 			{ S::__start__, S::_verticalbar_, {true , [](char c)->bool {return c == '|'; }} },
 			{ S::__start__, S::_caret_, {true , [](char c)->bool {return c == '^'; }} },
 
+			{ S::__start__, S::__commentline__, {true , [](char c)->bool {return c == ';'; }} },
+			{ S::__commentline__, S::__commentline__, {true , [](char c)->bool {return c != '\n'; }} },
+
+			{ S::_slash_, S::__commentrange_comment__, {true , [](char c)->bool {return c == '*'; }} },
+			{ S::__commentrange_comment__, S::__commentrange_comment__, {true , [](char c)->bool {return c != '['; }} },
+			{ S::__commentrange_comment__, S::__commentrange_end1__, {true , [](char c)->bool {return c == ']'; }} },
+			{ S::__commentrange_end1__, S::__commentrange_comment__, {true , [](char c)->bool {return c != ';'; }} },
+			{ S::__commentrange_end1__, S::__commentrange_end2__, {true , [](char c)->bool {return c == ';'; }} },
+
 			{ S::__start__, S::_whitespace_, {true , [](char c)->bool {return c == ' '; }} },
 			{ S::__start__, S::_newline_, {true , [](char c)->bool {return c == '\n'; }} },
 
 			{ S::_whitespace_, S::_whitespace_, {true , [](char c)->bool {return c == ' ' && c != '\n'; }}},
 
-			{ S::__start__, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return ('9' < c || c < '0'); }}},
-
-			{ S::a, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::ad, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::add, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false;  }}}, {S::addc, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false;  }}}, {S::addi, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false;  }}},
-
-			{ S::b, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::bn, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::bnd, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::bndi, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::bo, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::bor, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::bori, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::bx, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::bxr, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::bxri, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::c, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::ca, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::cal, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::call, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::cm, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::cmp, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-
-			{ S::h, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::ha, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::hal, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::halt, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::j, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::jm, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::jmp, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::l, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::ld, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::m, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::mo, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::mov, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::n, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::no, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::nop, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::p, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::po, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::pop, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::pu, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::pus, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::push, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::r, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::re, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::ret, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::s, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::se, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::set, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::sh, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::shi, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::shif, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::shift, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}},
-			{ S::shiftl, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::shiftli, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::shiftr, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::shiftri, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::st, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-			{ S::su, S::__InterTreeEpsilonID__, {false, [](char c)->bool {return true;}}}, { S::sub, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::subc, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}}, { S::subi, S::__KeyTreeEpsilonID__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-
-			{ S::_dot_1, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_16, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_16H, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_dot_16L, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_3, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_32, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_8, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_8H, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_dot_8L, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_b, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_bs, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_bss, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_c, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_ca, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_car, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_carr, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_carry, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_dot_carry4, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_d, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_da, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_dat, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_data, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_f, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_fu, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_ful, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_full, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_fl, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_fla, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_flag, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_g, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_ge, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return false;  }}}, {S::_dot_gen_openbrack_, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }}},
-			{ S::_dot_gen_openbrack_0, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_0_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_1, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_1_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_2, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_2_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_3, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_3_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_4, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_4_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_5, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_5_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_6, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_6_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_7, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_7_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_8, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_8_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_9, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_9_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_10, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_10_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_11, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_11_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_12, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_12_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_13, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_13_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_14, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_14_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_15, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_15_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_16, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_16_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_17, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_17_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_18, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_18_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_19, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_19_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_20, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_20_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_21, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_21_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_22, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_22_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_23, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_23_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_gen_openbrack_24, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_gen_openbrack_24_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_n, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_ne, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_neg, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_o, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_on, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_one, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_ov, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_ove, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_over, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_overf, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_overfl, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_overflo, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_overflow, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_p, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_pc, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_po, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_pos, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_s, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_sb, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_sbp, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_st, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_sta, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_stac, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_stack, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_S1, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_S16, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_S16L, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_dot_S8, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_S8H, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_dot_S8L, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_t, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_te, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_tex, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_text, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_dot_z, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::_dot_ze, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_zer, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}}, { S::_dot_zero, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_percent_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }}},
-
-			{ S::_percent_f, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_fl, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_fla, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_flag, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_fu, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_ful, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_full, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-
-			{ S::_percent_g, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_ge, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-
-			{ S::_percent_gen_openbrack_, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_gen_openbrack_0, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_0_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_1, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_1_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_2, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_2_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_3, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_3_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_4, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_4_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_5, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_5_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_6, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_6_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_7, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_7_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_8, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_8_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_9, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_9_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_10, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_10_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_11, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_11_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_12, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_12_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_13, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_13_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_14, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_14_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_15, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_15_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_16, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_16_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_17, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_17_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_18, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_18_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_19, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_19_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_20, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_20_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_21, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_21_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_22, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_22_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_23, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_23_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_gen_openbrack_24, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_gen_openbrack_24_closebrack_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-
-			{ S::_percent_o, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_on, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_one, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-
-			{ S::_percent_p, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_pc, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-
-			{ S::_percent_s, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_sb, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_sbp, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-			{ S::_percent_st, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_sta, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_stac, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_stack, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-
-			{ S::_percent_z, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} },
-			{ S::_percent_ze, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_zer, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true; }} }, { S::_percent_zero, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false;  }} },
-
-			{ S::_openparen_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_closeparen_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_colon_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_semicolon_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::_plus_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_minus_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_star_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_star_star_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_slash_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-			{ S::_tilde_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_ampersend_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_verticalbar_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::_caret_, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::__firstnum__, S::__InterTreeEpsilonUK__, {false, [](char c)->bool {return true;}}},
-			{ S::__hexnum__, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::__decnum__, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::__octnum__, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}}, { S::__binnum__, S::__KeyTreeEpsilonUK__, {false, [](char c)->bool {return false; }}},
-
-			{ S::__InterTreeEpsilonID__, S::__identifier__, {true, [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_'); }}},
-			{ S::__KeyTreeEpsilonID__, S::__identifier__, {true, [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_'); }} },
+			{ S::__start__, S::__identifier__, {true, [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (c == '_'); }} },
 			{ S::__identifier__, S::__identifier__, {true, [](char c)->bool {return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_'); }} },
-				
-			{ S::__identifier__, S::__unknown__, {true, [](char c)->bool {return !(('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_')) && c != ' ' && c != '\n'; }}},
-			{ S::__InterTreeEpsilonUK__, S::__unknown__, {true, [](char c)->bool {return c != ' ' && c != '\n'; }}},
-			{ S::__KeyTreeEpsilonUK__, S::__unknown__, {true, [](char c)->bool {return c != ' ' && c != '\n'; }} },
-			{ S::__unknown__, S::__unknown__, { true, [](char c)->bool {return c != ' ' && c != '\n'; }}}
 			}
 		};
 
@@ -1155,23 +700,20 @@ namespace assembler {
 			call, ret,
 			nop, halt,
 
-			dot_gen0, dot_gen1, dot_gen2, dot_gen3, dot_gen4, dot_gen5, dot_gen6, dot_gen7, dot_gen8,
-			dot_gen9, dot_gen10, dot_gen11, dot_gen12, dot_gen13, dot_gen14, dot_gen15, dot_gen16,
-			dot_gen17, dot_gen18, dot_gen19, dot_gen20, dot_gen21, dot_gen22, dot_gen23, dot_gen24,
-			dot_sbp, dot_zero, dot_one, dot_full, dot_pc, dot_stack, dot_flag,
+			reg,
+			gen,
+			sbp, zero, one, full, pc, stack, flag,
 
-			dot_neg, dot_pos, dot_carry, dot_carry4, dot_overflow, dot_gen,
+			neg, pos, carry, carry4, overflow,
 
-			dot_32, dot_16L, dot_8L, dot_8H, dot_16H, dot_S16L, dot_S8L, dot_S8H,
-
-			percent_gen0, percent_gen1, percent_gen2, percent_gen3, percent_gen4, percent_gen5, percent_gen6, percent_gen7, percent_gen8,
-			percent_gen9, percent_gen10, percent_gen11, percent_gen12, percent_gen13, percent_gen14, percent_gen15, percent_gen16,
-			percent_gen17, percent_gen18, percent_gen19, percent_gen20, percent_gen21, percent_gen22, percent_gen23, percent_gen24,
-			percent_sbp, percent_zero, percent_one, percent_full, percent_pc, percent_stack, percent_flag,
+			_32B_, _16L_, _8L_, _8H_, _16H_, _S16L_, _S8L_, _S8H_,
 
 			text, data, bss,
 
+			dot,
+
 			openparen, closeparen,
+			openbrack, closebrack,
 
 			hexnum, decnum, octnum, binnum,
 
@@ -1180,6 +722,8 @@ namespace assembler {
 			plus, minus,
 			star, dstar, slash, percent,
 			tilde, ampersend, verticalbar, caret,
+
+			comment,
 
 			whitespace,
 			newline,
@@ -1198,6 +742,14 @@ namespace assembler {
 			{S::shiftl, TokenType::shiftl }, {S::shiftr, TokenType::shiftr}, {S::shiftli, TokenType::shiftli}, {S::shiftri, TokenType::shiftri},
 			{S::cmp, TokenType::cmp},
 
+			{S::reg, TokenType::reg},
+			{S::gen, TokenType::gen},
+			{S::sbp, TokenType::sbp}, {S::zero, TokenType::zero}, {S::one, TokenType::one}, {S::full, TokenType::full}, {S::pc, TokenType::pc}, {S::stack, TokenType::stack}, {S::flag, TokenType::flag},
+
+			{S::neg, TokenType::neg}, {S::pos, TokenType::pos}, {S::carry, TokenType::carry}, {S::carry4, TokenType::carry4}, {S::overflow, TokenType::overflow},
+
+			{S::_32B_, TokenType::_32B_}, {S::_16L_, TokenType::_16L_}, {S::_8L_, TokenType::_8L_}, {S::_8H_, TokenType::_8H_}, {S::_16H_, TokenType::_16H_}, {S::S16L, TokenType::_S16L_}, {S::S8L, TokenType::_S8L_}, {S::S8H, TokenType::_S8H_},
+
 			{S::mov, TokenType::mov}, {S::set, TokenType::set},
 			{S::push, TokenType::push}, {S::pop, TokenType::pop},
 			{S::ld, TokenType::ld}, {S::st, TokenType::st},
@@ -1205,94 +757,32 @@ namespace assembler {
 			{S::call, TokenType::call}, {S::ret, TokenType::ret},
 			{S::nop, TokenType::nop}, {S::halt, TokenType::halt},
 
-			{S::_dot_gen_openbrack_0_closebrack_, TokenType::dot_gen0},
-			{S::_dot_gen_openbrack_1_closebrack_, TokenType::dot_gen1},
-			{S::_dot_gen_openbrack_2_closebrack_, TokenType::dot_gen2},
-			{S::_dot_gen_openbrack_3_closebrack_, TokenType::dot_gen3},
-			{S::_dot_gen_openbrack_4_closebrack_, TokenType::dot_gen4},
-			{S::_dot_gen_openbrack_5_closebrack_, TokenType::dot_gen5},
-			{S::_dot_gen_openbrack_6_closebrack_, TokenType::dot_gen6},
-			{S::_dot_gen_openbrack_7_closebrack_, TokenType::dot_gen7},
-			{S::_dot_gen_openbrack_8_closebrack_, TokenType::dot_gen8},
-			{S::_dot_gen_openbrack_9_closebrack_, TokenType::dot_gen9},
-			{S::_dot_gen_openbrack_10_closebrack_, TokenType::dot_gen10},
-			{S::_dot_gen_openbrack_11_closebrack_, TokenType::dot_gen11},
-			{S::_dot_gen_openbrack_12_closebrack_, TokenType::dot_gen12},
-			{S::_dot_gen_openbrack_13_closebrack_, TokenType::dot_gen13},
-			{S::_dot_gen_openbrack_14_closebrack_, TokenType::dot_gen14},
-			{S::_dot_gen_openbrack_15_closebrack_, TokenType::dot_gen15},
-			{S::_dot_gen_openbrack_16_closebrack_, TokenType::dot_gen16},
-			{S::_dot_gen_openbrack_17_closebrack_, TokenType::dot_gen17},
-			{S::_dot_gen_openbrack_18_closebrack_, TokenType::dot_gen18},
-			{S::_dot_gen_openbrack_19_closebrack_, TokenType::dot_gen19},
-			{S::_dot_gen_openbrack_20_closebrack_, TokenType::dot_gen20},
-			{S::_dot_gen_openbrack_21_closebrack_, TokenType::dot_gen21},
-			{S::_dot_gen_openbrack_22_closebrack_, TokenType::dot_gen22},
-			{S::_dot_gen_openbrack_23_closebrack_, TokenType::dot_gen23},
-			{S::_dot_gen_openbrack_24_closebrack_, TokenType::dot_gen24},
-			{S::_dot_sbp, TokenType::dot_sbp},
-			{S::_dot_stack, TokenType::dot_zero},
-			{S::_dot_one, TokenType::dot_one},
-			{S::_dot_full, TokenType::dot_full},
-			{S::_dot_pc, TokenType::dot_pc},
-			{S::_dot_stack, TokenType::dot_stack},
-			{S::_dot_flag, TokenType::dot_flag},
-
-			{S::_percent_gen_openbrack_0_closebrack_, TokenType::percent_gen0},
-			{S::_percent_gen_openbrack_1_closebrack_, TokenType::percent_gen1},
-			{S::_percent_gen_openbrack_2_closebrack_, TokenType::percent_gen2},
-			{S::_percent_gen_openbrack_3_closebrack_, TokenType::percent_gen3},
-			{S::_percent_gen_openbrack_4_closebrack_, TokenType::percent_gen4},
-			{S::_percent_gen_openbrack_5_closebrack_, TokenType::percent_gen5},
-			{S::_percent_gen_openbrack_6_closebrack_, TokenType::percent_gen6},
-			{S::_percent_gen_openbrack_7_closebrack_, TokenType::percent_gen7},
-			{S::_percent_gen_openbrack_8_closebrack_, TokenType::percent_gen8},
-			{S::_percent_gen_openbrack_9_closebrack_, TokenType::percent_gen9},
-			{S::_percent_gen_openbrack_10_closebrack_, TokenType::percent_gen10},
-			{S::_percent_gen_openbrack_11_closebrack_, TokenType::percent_gen11},
-			{S::_percent_gen_openbrack_12_closebrack_, TokenType::percent_gen12},
-			{S::_percent_gen_openbrack_13_closebrack_, TokenType::percent_gen13},
-			{S::_percent_gen_openbrack_14_closebrack_, TokenType::percent_gen14},
-			{S::_percent_gen_openbrack_15_closebrack_, TokenType::percent_gen15},
-			{S::_percent_gen_openbrack_16_closebrack_, TokenType::percent_gen16},
-			{S::_percent_gen_openbrack_17_closebrack_, TokenType::percent_gen17},
-			{S::_percent_gen_openbrack_18_closebrack_, TokenType::percent_gen18},
-			{S::_percent_gen_openbrack_19_closebrack_, TokenType::percent_gen19},
-			{S::_percent_gen_openbrack_20_closebrack_, TokenType::percent_gen20},
-			{S::_percent_gen_openbrack_21_closebrack_, TokenType::percent_gen21},
-			{S::_percent_gen_openbrack_22_closebrack_, TokenType::percent_gen22},
-			{S::_percent_gen_openbrack_23_closebrack_, TokenType::percent_gen23},
-			{S::_percent_gen_openbrack_24_closebrack_, TokenType::percent_gen24},
-			{S::_percent_sbp, TokenType::percent_sbp},
-			{S::_percent_stack, TokenType::percent_zero},
-			{S::_percent_one, TokenType::percent_one},
-			{S::_percent_full, TokenType::percent_full},
-			{S::_percent_pc, TokenType::percent_pc},
-			{S::_percent_stack, TokenType::percent_stack},
-			{S::_percent_flag, TokenType::percent_flag},
-
-			{S::_dot_neg, TokenType::dot_neg}, {S::_dot_pos, TokenType::dot_pos}, {S::_dot_carry, TokenType::dot_carry}, {S::_dot_carry4, TokenType::dot_carry4}, {S::_dot_overflow, TokenType::dot_overflow}, {S::_dot_gen, TokenType::dot_gen},
-
-			{S::_dot_32, TokenType::dot_32}, {S::_dot_16L, TokenType::dot_16L}, {S::_dot_8L, TokenType::dot_8L}, {S::_dot_8H, TokenType::dot_8H}, {S::_dot_16H, TokenType::dot_16H}, {S::_dot_S16L, TokenType::dot_S16L}, {S::_dot_S8L, TokenType::dot_S8L}, {S::_dot_S8H, TokenType::dot_S8H},
-
 			{S::_dot_text, TokenType::text}, {S::_dot_data, TokenType::data}, {S::_dot_bss, TokenType::bss},
 
+			{S::_dot_, TokenType::dot},
+
 			{S::_openparen_, TokenType::openparen}, {S::_closeparen_, TokenType::closeparen},
+			{S::_openbrack_, TokenType::openbrack}, {S::_closebrack_, TokenType::closebrack},
 
 			{S::__hexnum__, TokenType::hexnum}, {S::__decnum__, TokenType::decnum}, {S::__octnum__, TokenType::octnum}, {S::__binnum__, TokenType::binnum},
 
-			{S::_colon_, TokenType::colon}, {S::_semicolon_, TokenType::semicolon},
+			{S::_colon_, TokenType::colon},
 
 			{S::_plus_, TokenType::plus}, {S::_minus_, TokenType::minus},
 			{S::_star_, TokenType::star}, {S::_star_star_, TokenType::dstar}, {S::_slash_, TokenType::slash}, {S::_percent_, TokenType::percent},
 			{S::_tilde_, TokenType::tilde}, {S::_ampersend_, TokenType::ampersend}, {S::_verticalbar_, TokenType::verticalbar}, {S::_caret_, TokenType::caret},
+
+			{S::__commentline__, TokenType::comment},
+			{S::__commentrange_comment__, TokenType::comment},
+			{S::__commentrange_end1__, TokenType::comment},
+			{S::__commentrange_end2__, TokenType::comment},
 
 			{S::_whitespace_, TokenType::whitespace},
 			{S::_newline_, TokenType::newline},
 
 			{S::__identifier__, TokenType::identifier},
 
-			{S::__unknown__, TokenType::unknown}
+			{S::__unknown__, TokenType::unknown},
 		};
 
 		typedef struct _Token {
@@ -1301,8 +791,6 @@ namespace assembler {
 		} Token;
 
 		void Lexer(std::string input, std::vector<Token>& tokens) {
-			//input.push_back(' ');
-			// ----<<tmp>>----
 			std::string removedTab;
 			for (auto it = input.begin(); it != input.end(); it++) {
 				if (*it == '\t') {
@@ -1313,12 +801,11 @@ namespace assembler {
 					removedTab.push_back(*it);
 			}
 			input = removedTab;
-			// ----<<end>>----
 
 			size_t len = input.size();
 			size_t baseID = 0;
 			size_t maxID = 0;
-			S curState = S::__unknown__;
+			S curState;
 			std::string curString; 
 			
 			auto baseIt = input.begin();
@@ -1326,26 +813,25 @@ namespace assembler {
 			std::queue<LFSM::QueueData> stateQ;
 			while (baseID < len) {
 				stateQ.push({ S::__start__, 0,  });
+
 				char c = -1;
 				while (!stateQ.empty()) {
 					LFSM::QueueData qData = stateQ.front();
-					c = -1;
+					c = '\n';
 					if (qData.id + baseID < len)
 						c = input.at(qData.id + baseID);
 
 					LRET ret = lexerFSM.run(stateQ, c);
 
-					if (ret == LRET::NoTransition) {
-						if (maxID <= qData.id && (int)curState >= (int)qData.cur) {
+					if (ret == LRET::NoTransition || qData.id + baseID >= len) {
+						if (maxID < qData.id || (maxID == qData.id && (qData.cur < curState))) {
 							maxID = qData.id;
-							curState = qData.cur;
 
+							curState = qData.cur;
 							curString.clear();
 							int ct = 0;
-							for (auto it = baseIt; it != input.end() && ct < maxID; it++) { 
-								curString.push_back(*it);
-
-								ct++; 
+							for (auto it = baseIt; it != input.end() && ct < qData.id; it++) { 
+								curString.push_back(*it); ct++; 
 							}
 						}
 					}
@@ -1358,15 +844,10 @@ namespace assembler {
 					maxID = 1;
 				}
 				else {
-					if (curState == S::__unknown__)
+					if (!tokenTypeMap.count(curState))
 						tokens.push_back({ curString, TokenType::unknown });
-					else {
-						auto it = tokenTypeMap.find(curState);
-						if (it == tokenTypeMap.end())
-							tokens.push_back({ curString, TokenType::unknown });
-						else
-							tokens.push_back({ curString, it->second});
-					}
+					else
+						tokens.push_back({ curString, tokenTypeMap[curState] });
 				}
 
 				int ct = 0;
@@ -1374,9 +855,11 @@ namespace assembler {
 
 				baseID = baseID + maxID;
 				maxID = 0;
-				curState = S::__unknown__;
 				curString.clear();
 			}
+		}
+
+		void PreProcesser(std::vector<lexer::Token>& tokens) {
 		}
 	}
 
@@ -1388,7 +871,8 @@ namespace assembler {
 		};
 
 		enum class T {
-			__unknown__ = -1,
+			__unknown__ = -2,
+			__notusing__ = -1,
 
 			__start__,
 			__success__,
@@ -1415,6 +899,41 @@ namespace assembler {
 			__labelsign__,
 
 			__identifier__,
+
+			__expression__,
+			__expressionL0__,
+			__expressionL1__,
+			__expressionL2__,
+			__expressionL3__,
+			__expressionL4__,
+			__expressionL5__,
+			__expressionL6__,
+			__expressionL7__,
+
+			__operatorL1__,
+			__operatorL2__,
+			__operatorL3__,
+			__operatorL4__,
+			__operatorL5__,
+			__operatorL6__,
+			__operatorL7__,
+
+			__operationL1__,
+			__operationL2__,
+			__operationL3__,
+			__operationL4__,
+			__operationL5__,
+			__operationL6__,
+			__operationL7__,
+
+			__openparen__,
+			__closeparen__,
+
+			__index__,
+			__openbrack__,
+			__closebrack__,
+
+			__dot__,
 
 			__WSPAL__,
 			__WSPDC__,
@@ -1450,6 +969,42 @@ namespace assembler {
 
 			{ T::__identifier__, "identifier" },
 
+			{ T::__expression__, "expression"},
+
+			{ T::__expressionL0__, "expressionL0"},
+			{ T::__expressionL1__, "expressionL1"},
+			{ T::__expressionL2__, "expressionL2"},
+			{ T::__expressionL3__, "expressionL3"},
+			{ T::__expressionL4__, "expressionL4"},
+			{ T::__expressionL5__, "expressionL5"},
+			{ T::__expressionL6__, "expressionL6"},
+			{ T::__expressionL7__, "expressionL7"},
+
+			{ T::__operatorL1__, "operatorL1"},
+			{ T::__operatorL2__, "operatorL2"},
+			{ T::__operatorL3__, "operatorL3"},
+			{ T::__operatorL4__, "operatorL4"},
+			{ T::__operatorL5__, "operatorL5"},
+			{ T::__operatorL6__, "operatorL6"},
+			{ T::__operatorL7__, "operatorL7"},
+
+			{ T::__operationL1__, "operationL1"},
+			{ T::__operationL2__, "operationL2"},
+			{ T::__operationL3__, "operationL3"},
+			{ T::__operationL4__, "operationL4"},
+			{ T::__operationL5__, "operationL5"},
+			{ T::__operationL6__, "operationL6"},
+			{ T::__operationL7__, "operationL7"},
+
+			{T::__openparen__, "openparen"},
+			{T::__closeparen__, "closeparen"},
+
+			{T::__index__, "index"},
+			{T::__openbrack__, "openbrack"},
+			{T::__closebrack__, "closebrack"},
+
+			{T::__dot__, "dot"},
+
 			{ T::__WSPAL__, "WSPAL" },
 			{ T::__WSPDC__, "WSPDC" },
 			{ T::__NEWL__, "NEWL" }
@@ -1476,56 +1031,109 @@ namespace assembler {
 			},
 
 			{
-			{S::start, S::run, {false, false, {T::__success__, T::__start__}, [](TT t, T s)->bool {return true; }}},
-			{S::run, S::success, {false, true, {}, [](TT t, T s)->bool {return (s == T::__success__); }}},
+			{S::start, S::run, {false, false, T::__notusing__, {T::__success__, T::__start__}, [](TT t)->bool {return true; }}},
+			{S::run, S::success, {false, true, T::__success__, {}, [](TT t)->bool {return true; }}},
 
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__WSPAL__) && (t == TT::whitespace); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__WSPDC__) && (t == TT::whitespace); }}},
-			{S::run, S::run, {false, true, {}, [](TT t, T s)->bool {return (s == T::__WSPDC__) && (t != TT::whitespace); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__NEWL__) && (t == TT::newline); }}},
+			{S::run, S::run, {true, true, T::__WSPAL__, {}, [](TT t)->bool {return (t == TT::whitespace); }}},
+			{S::run, S::run, {true, true, T::__WSPDC__, {}, [](TT t)->bool {return (t == TT::whitespace); }}},
+			{S::run, S::run, {false, true, T::__WSPDC__, {}, [](TT t)->bool {return (t != TT::whitespace); }}},
+			{S::run, S::run, {true, true, T::__NEWL__, {T::__WSPDC__}, [](TT t)->bool {return (t == TT::newline); }}},
+			{S::run, S::run, {true, true, T::__NEWL__, {T::__NEWL__}, [](TT t)->bool {return (t == TT::newline); }}},
+			{S::run, S::run, {false, true, T::__NEWL__, {T::__NEWL__, T::__WSPAL__}, [](TT t)->bool {return true; }}},
+			{S::run, S::run, {true, false, T::__notusing__, {}, [](TT t)->bool {return (t == TT::comment); }}},
 
-			{S::run, S::run, {false, true, {T::__section__}, [](TT t, T s)->bool {return (s == T::__start__); }}},
+			{S::run, S::run, {false, true, T::__start__, {T::__section__}, [](TT t)->bool {return true; }}},
+			{S::run, S::run, {false, true, T::__start__, {T::__section__, T::__WSPDC__}, [](TT t)->bool {return true; }}},
+			{S::run, S::run, {false, true, T::__start__, {T::__section__, T::__NEWL__}, [](TT t)->bool {return true; }}},
+			{S::run, S::run, {false, true, T::__start__, {}, [](TT t)->bool {return true; }}},
 
-			{S::run, S::run, {true, true, {T::__text__,	T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::text); }}},
-			{S::run, S::run, {true, true, {T::__data__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::data); }}},
-			{S::run, S::run, {true, true, {T::__bss__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::bss); }}},
-			{S::run, S::run, {true, true, {T::__section__, T::__text__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::text); }}},
-			{S::run, S::run, {true, true, {T::__section__, T::__data__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::data); }}},
-			{S::run, S::run, {true, true, {T::__section__, T::__bss__, T::__NEWL__, T::__WSPDC__}, [](TT t, T s)->bool {return (s == T::__section__) && (t == TT::bss); }}},
+			{S::run, S::run, {true, true, T::__section__, {T::__text__, T::__NEWL__}, [](TT t)->bool {return (t == TT::text); }}},
+			{S::run, S::run, {true, true, T::__section__, {T::__data__, T::__NEWL__}, [](TT t)->bool {return (t == TT::data); }}},
+			{S::run, S::run, {true, true, T::__section__, {T::__bss__, T::__NEWL__}, [](TT t)->bool {return (t == TT::bss); }}},
+			{S::run, S::run, {true, true, T::__section__, {T::__section__, T::__text__, T::__NEWL__}, [](TT t)->bool {return (t == TT::text); }}},
+			{S::run, S::run, {true, true, T::__section__, {T::__section__, T::__data__, T::__NEWL__}, [](TT t)->bool {return (t == TT::data); }}},
+			{S::run, S::run, {true, true, T::__section__, {T::__section__, T::__bss__, T::__NEWL__}, [](TT t)->bool {return (t == TT::bss); }}},
 
-			{S::run, S::run, {false, true, {T::__NEWL__, T::__WSPDC__, T::__instruction__}, [](TT t, T s)->bool {return (s == T::__text__) && ((TT::add <= t && t <= TT::halt)); }}},
-			{S::run, S::run, {false, true, {T::__text__, T::__NEWL__, T::__WSPDC__, T::__instruction__}, [](TT t, T s)->bool {return (s == T::__text__) && ((TT::add <= t && t <= TT::halt)); }}},
+			{S::run, S::run, {false, true, T::__text__, {T::__NEWL__, T::__instruction__}, [](TT t)->bool {return ((TT::add <= t && t <= TT::halt)); }}},
+			{S::run, S::run, {false, true, T::__text__,  {T::__text__, T::__NEWL__, T::__instruction__}, [](TT t)->bool {return ((TT::add <= t && t <= TT::halt)); }}},
 
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::ret || t == TT::nop || t == TT::halt); }}}, //N
-			{S::run, S::run, {true, true,  {T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::pop || t == TT::push); }}}, //R
-			{S::run, S::run, {true, true, {T::__register__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::add || t == TT::sub || t == TT::addc || t == TT::subc || t == TT::bxr || t == TT::bor || t == TT::bnd || t == TT::shiftl || t == TT::shiftr || t == TT::cmp || t == TT::mov); }}}, //R-R
-			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::addi || t == TT::subi || t == TT::bxri || t == TT::bori || t == TT::bndi || t == TT::shiftli || t == TT::shiftri || t == TT::set); }}}, //R-DI
-			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::call); }}}, //R-SDI
-			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__, T::__regvarient__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::ld || t == TT::st); }}}, //RV-R-SDI
-			{S::run, S::run, {true, true, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__, T::__flagvarient__}, [](TT t, T s)->bool {return (s == T::__instruction__) && (t == TT::jmp); }}}, //FV-R-SDI
+			{S::run, S::run, {true, true, T::__instruction__, {}, [](TT t)->bool {return (t == TT::ret || t == TT::nop || t == TT::halt); }}}, //N
+			{S::run, S::run, {true, true, T::__instruction__, {T::__register__, T::__WSPAL__}, [](TT t)->bool {return (t == TT::pop || t == TT::push); }}}, //R
+			{S::run, S::run, {true, true, T::__instruction__, {T::__register__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t)->bool {return (t == TT::add || t == TT::sub || t == TT::addc || t == TT::subc || t == TT::bxr || t == TT::bor || t == TT::bnd || t == TT::shiftl || t == TT::shiftr || t == TT::cmp || t == TT::mov); }}}, //R-R
+			{S::run, S::run, {true, true, T::__instruction__, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t)->bool {return (t == TT::addi || t == TT::subi || t == TT::bxri || t == TT::bori || t == TT::bndi || t == TT::shiftli || t == TT::shiftri || t == TT::set); }}}, //R-DI
+			{S::run, S::run, {true, true, T::__instruction__, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__}, [](TT t)->bool {return (t == TT::call); }}}, //R-SDI
+			{S::run, S::run, {true, true, T::__instruction__, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__, T::__regvarient__, T::__dot__}, [](TT t)->bool {return (t == TT::ld || t == TT::st); }}}, //RV-R-SDI
+			{S::run, S::run, {true, true, T::__instruction__, {T::__immidate__, T::__WSPAL__, T::__register__, T::__WSPAL__, T::__flagvarient__, T::__dot__}, [](TT t)->bool {return (t == TT::jmp); }}}, //FV-R-SDI
 
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__regvarient__) && ((TT::dot_gen0 <= t && t <= TT::dot_flag)); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__flagvarient__) && ((TT::dot_neg <= t && t <= TT::dot_gen) || t == TT::dot_zero || t == TT::dot_one); }}},
+			{S::run, S::run, {true, true, T::__regvarient__, {}, [](TT t)->bool {return ((TT::sbp <= t && t <= TT::flag)); }}},
+			{S::run, S::run, {true, true, T::__regvarient__, {T::__index__}, [](TT t)->bool {return (t == TT::gen || t == TT::reg); }}},
 
-			{S::run, S::run, {false, true, {T::__regmode__, T::__regname__}, [](TT t, T s)->bool {return (s == T::__register__); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__regname__) && ((TT::percent_gen0 <= t && t <= TT::percent_flag)); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__regmode__) && ((TT::dot_32 <= t && t <= TT::dot_S8H)); }}},
+			{S::run, S::run, {true, true, T::__flagvarient__, {}, [](TT t)->bool {return ((TT::neg <= t && t <= TT::overflow) || t == TT::zero || t == TT::one || t == TT::gen); }}},
 
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__immidate__) && (TT::hexnum <= t && t <= TT::binnum); }}},
+			{S::run, S::run, {true, true, T::__register__, {T::__regmode__, T::__dot__, T::__regname__}, [](TT t)->bool {return (t == TT::percent); }}},
+			{S::run, S::run, {true, true, T::__regname__, {T::__index__}, [](TT t)->bool {return (t == TT::gen || t == TT::reg); }}},
+			{S::run, S::run, {true, true, T::__regname__, {}, [](TT t)->bool {return ((TT::sbp <= t && t <= TT::flag)); }}},
+			{S::run, S::run, {true, true, T::__regmode__, {}, [](TT t)->bool {return ((TT::_32B_ <= t && t <= TT::_S8H_)); }}},
 
-			{S::run, S::run, {false, true, {T::__label__}, [](TT t, T s)->bool {return (s == T::__text__) && (t == TT::identifier); }}},
-			{S::run, S::run, {false, true, {T::__text__, T::__label__}, [](TT t, T s)->bool {return (s == T::__text__) && (t == TT::identifier); }}},
+			{S::run, S::run, {false, true, T::__index__, {T::__closebrack__, T::__expression__, T::__openbrack__}, [](TT t)->bool {return true; }}},
+			{S::run, S::run, {true, true, T::__openbrack__, {}, [](TT t)->bool {return (t == TT::openbrack); }}},
+			{S::run, S::run, {true, true, T::__closebrack__, {}, [](TT t)->bool {return (t == TT::closebrack); }}},
 
-			{S::run, S::run, {false, true, {T::__NEWL__, T::__WSPDC__, T::__labelsign__, T::__WSPDC__, T::__labelid__}, [](TT t, T s)->bool {return (s == T::__label__); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__labelid__) && (t == TT::identifier); }}},
-			{S::run, S::run, {true, true, {}, [](TT t, T s)->bool {return (s == T::__labelsign__) && (t == TT::colon); }}}
+			{S::run, S::run, {true, true, T::__dot__, {}, [](TT t)->bool {return (t == TT::dot); }}},
+
+			{S::run, S::run, {false, true, T::__immidate__, {T::__expression__}, [](TT t)->bool {return true; }}},
+
+			{S::run, S::run, {false, true, T::__text__, {T::__NEWL__, T::__label__}, [](TT t)->bool {return (t == TT::identifier); }}},
+			{S::run, S::run, {false, true, T::__text__, {T::__text__, T::__NEWL__, T::__label__}, [](TT t)->bool {return (t == TT::identifier); }}},
+
+			{S::run, S::run, {false, true, T::__label__, {T::__labelsign__, T::__WSPDC__, T::__labelid__}, [](TT t)->bool {return true; }}},
+			{S::run, S::run, {true, true, T::__labelid__, {}, [](TT t)->bool {return (t == TT::identifier); }}},
+			{S::run, S::run, {true, true,  T::__labelsign__, {}, [](TT t)->bool {return (t == TT::colon); }}},
+
+			{ S::run, S::run, {false, true, T::__expression__, {T::__operationL7__, T::__expressionL7__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL7__, {T::__operationL7__, T::__operatorL7__, T::__expressionL7__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL7__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {false, true, T::__operationL7__, {T::__operationL6__, T::__expressionL6__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL6__, {T::__operationL6__, T::__operatorL6__, T::__expressionL6__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL6__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {false, true, T::__operationL6__, {T::__operationL5__, T::__expressionL5__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL5__, {T::__operationL5__, T::__operatorL5__, T::__expressionL5__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL5__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {false, true, T::__operationL5__, {T::__operationL4__, T::__expressionL4__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL4__, {T::__operationL4__, T::__operatorL4__, T::__expressionL4__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL4__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {false, true, T::__operationL4__, {T::__operationL3__, T::__expressionL3__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL3__, {T::__operationL3__, T::__operatorL3__, T::__expressionL3__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL3__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {false, true, T::__operationL3__, {T::__operationL2__, T::__expressionL2__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL2__, {T::__operationL2__, T::__expressionL2__, T::__operatorL2__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL2__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {false, true, T::__operationL2__, {T::__operationL1__, T::__expressionL1__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL1__, {T::__operationL1__, T::__expressionL1__, T::__operatorL1__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__operationL1__, {}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {true, true, T::__operationL1__, {}, [](TT t)->bool {return true && ((TT::hexnum <= t && t <= TT::binnum)); }}},
+			{ S::run, S::run, {false, true, T::__operationL1__, {T::__closeparen__, T::__expression__, T::__openparen__}, [](TT t)->bool {return true; }}},
+
+			{ S::run, S::run, {true, true, T::__operatorL7__, {}, [](TT t)->bool {return (t == TT::verticalbar); }}},
+			{ S::run, S::run, {true, true, T::__operatorL6__, {}, [](TT t)->bool {return (t == TT::caret); }}},
+			{ S::run, S::run, {true, true, T::__operatorL5__, {}, [](TT t)->bool {return (t == TT::ampersend); }}},
+			{ S::run, S::run, {true, true, T::__operatorL4__, {}, [](TT t)->bool {return (t == TT::minus || t == TT::plus); }}},
+			{ S::run, S::run, {true, true, T::__operatorL3__, {}, [](TT t)->bool {return (t == TT::star || t == TT::slash); }}},
+			{ S::run, S::run, {true, true, T::__operatorL2__, {}, [](TT t)->bool {return (t == TT::dstar); }}},
+			{ S::run, S::run, {true, true, T::__operatorL1__, {}, [](TT t)->bool {return (t == TT::tilde); }}},
 			}
 		};
 
 		PPDA parserPDA(parserTable);
 
 		bool Parser(std::vector<lexer::Token>& tokens, Tree*& outTree) {
-
 			size_t len = tokens.size();
 			size_t maxID = 0;
 			Tree* tree = NULL;
@@ -1544,7 +1152,6 @@ namespace assembler {
 				if (qData.id < len)
 					curToken = tokens[qData.id];
 
-				std::queue<PPDA::QueueData> outQ;
 				PRET ret = parserPDA.run(stateQ, curToken.type);
 
 				if (ret == PRET::NoTransition) {
@@ -1555,7 +1162,7 @@ namespace assembler {
 						success = true;
 					}
 					if (!success && maxID < qData.id) {
-						maxID = qData.id;
+z`						maxID = qData.id;
 						curState = qData.cur;
 						tracker = qData.tracker;
 					}
@@ -1570,7 +1177,7 @@ namespace assembler {
 			for (auto it = tracker.begin(); it != tracker.end(); it++) {
 				auto track = *it;
 				cur->child = {};
-				cur->token = (0 <= track.id && track.id < len) ? tokens[track.id] : lexer::Token({ "u.k", TT::unknown });
+				cur->token = (0 <= track.id && track.id < len) ? tokens[track.id] : lexer::Token({ "u.k", {TT::unknown } });
 				cur->it = cur->child.end();
 				if (track.transition->second.rule.pushList.empty() && track.transition->second.rule.pop) {
 					if (!cur)
@@ -1588,14 +1195,12 @@ namespace assembler {
 				}
 				else {
 					for (auto si = track.transition->second.rule.pushList.rbegin(); si != track.transition->second.rule.pushList.rend(); si++) {
-						//cout << treeMap[*si] << ", " << track.transition->second.rule.increment << ", " << track.transition->second.rule.pop << "|";
 						Tree* nTree = new Tree;
 						nTree->type = *si;
 						nTree->prev = cur;
 						nTree->useToken = track.transition->second.rule.increment;
 						cur->child.push_back(nTree);
 					}
-					//cout << endl;
 					cur->it = cur->child.begin();
 
 					cur = *cur->it;
@@ -1608,8 +1213,12 @@ namespace assembler {
 		}
 	}
 
-	namespace evaluater {
+	namespace evaluator {
+		void Evaluator(parser::Tree& tree) {
+			std::map<std::string, unsigned __int32> varTable;
 
+
+		}
 	}
 
 	namespace iosystem {
@@ -1644,27 +1253,49 @@ void printTree(Tree* pTree, std::vector<vector<vector<Tree*>>>& out, std::vector
 }
 
 int main() {
+	ifstream file;
+	file.open("input.txt");
 
-	char buff[1024];
-	cin.getline(buff, 1024, '\\');
-	string str = buff;
+	string buff;
+	char c;
+	while (file.get(c)) {
+		buff.push_back(c);
+	}
+	if (buff.back() != '\n')
+		buff.push_back('\n');
+
+	cout << "file->" << endl;
+	cout << "------------------------------------------------------------" << endl;
+	cout << buff << endl;
+	cout << "------------------------------------------------------------" << endl;
 
 	std::vector<Token> tokens;
-	Lexer(str, tokens);
-
+	Lexer(buff, tokens);
+	PreProcesser(tokens);
 	cout << "lex->" << endl;
 	cout << "------------------------------------------------------------" << endl;
 	for (auto it = tokens.begin(); it != tokens.end(); it++) {
-		cout << ((it->text.front() == '\n') ? "newl" : it->text) << "; " << ((it->type == TokenType::unknown) ? "error" : "fine") << endl;
+		string tmp = it->text;
+		for (auto si = tmp.begin(); si != tmp.end(); ) {
+			if (*si == '\n') {
+				si = tmp.erase(si);
+				si = tmp.insert(si, '\\');
+				si++;
+				si = tmp.insert(si, 'n');
+			}
+			else
+				si++;
+		}
+		tmp.push_back('\t');
+		cout << tmp << "; " << ((it->type == TokenType::unknown) ? "error" : "fine") << endl;
 	}
 	cout << "------------------------------------------------------------" << endl;
 
-	
 	Tree* tree;
-	bool valid = Parser(tokens, tree); 
+	bool validParse = Parser(tokens, tree); 
 	cout << "parse->" << endl;
 	cout << "------------------------------------------------------------" << endl;
-	cout << valid << endl;
+	cout << (validParse ? "success" : "failed") << endl;
 	cout << "------------------------------------------------------------" << endl;
 	std::vector<int> tmp;
 	std::vector<std::vector<std::vector<Tree*>>> out;
