@@ -1162,7 +1162,7 @@ namespace assembler {
 						success = true;
 					}
 					if (!success && maxID < qData.id) {
-z`						maxID = qData.id;
+						maxID = qData.id;
 						curState = qData.cur;
 						tracker = qData.tracker;
 					}
