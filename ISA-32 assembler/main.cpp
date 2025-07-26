@@ -1094,32 +1094,32 @@ namespace assembler {
 			{ S::run, S::run, {false, true, T::__operationL7__, {T::__operationL7__, T::__operatorL7__, T::__expressionL7__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL7__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {false, true, T::__operationL7__, {T::__operationL6__, T::__expressionL6__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__expressionL7__, {T::__operationL6__, T::__expressionL6__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL6__, {T::__operationL6__, T::__operatorL6__, T::__expressionL6__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL6__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {false, true, T::__operationL6__, {T::__operationL5__, T::__expressionL5__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__expressionL6__, {T::__operationL5__, T::__expressionL5__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL5__, {T::__operationL5__, T::__operatorL5__, T::__expressionL5__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL5__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {false, true, T::__operationL5__, {T::__operationL4__, T::__expressionL4__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__expressionL5__, {T::__operationL4__, T::__expressionL4__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL4__, {T::__operationL4__, T::__operatorL4__, T::__expressionL4__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL4__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {false, true, T::__operationL4__, {T::__operationL3__, T::__expressionL3__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__expressionL4__, {T::__operationL3__, T::__expressionL3__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL3__, {T::__operationL3__, T::__operatorL3__, T::__expressionL3__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL3__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {false, true, T::__operationL3__, {T::__operationL2__, T::__expressionL2__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__expressionL3__, {T::__operationL2__, T::__expressionL2__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL2__, {T::__operationL2__, T::__expressionL2__, T::__operatorL2__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL2__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {false, true, T::__operationL2__, {T::__operationL1__, T::__expressionL1__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {false, true, T::__expressionL2__, {T::__operationL1__, T::__expressionL1__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL1__, {T::__operationL1__, T::__expressionL1__, T::__operatorL1__}, [](TT t)->bool {return true; }}},
 			{ S::run, S::run, {false, true, T::__operationL1__, {}, [](TT t)->bool {return true; }}},
 
-			{ S::run, S::run, {true, true, T::__operationL1__, {}, [](TT t)->bool {return true && ((TT::hexnum <= t && t <= TT::binnum)); }}},
-			{ S::run, S::run, {false, true, T::__operationL1__, {T::__closeparen__, T::__expression__, T::__openparen__}, [](TT t)->bool {return true; }}},
+			{ S::run, S::run, {true, true, T::__expressionL1__, {}, [](TT t)->bool {return true && ((TT::hexnum <= t && t <= TT::binnum)); }}},
+			{ S::run, S::run, {false, true, T::__expressionL1__, {T::__closeparen__, T::__expression__, T::__openparen__}, [](TT t)->bool {return true; }}},
 
 			{ S::run, S::run, {true, true, T::__operatorL7__, {}, [](TT t)->bool {return (t == TT::verticalbar); }}},
 			{ S::run, S::run, {true, true, T::__operatorL6__, {}, [](TT t)->bool {return (t == TT::caret); }}},
