@@ -1145,6 +1145,8 @@ namespace assembler {
 			stateQ.push({ S::start, {}, 0, {} });
 			PPDA::QueueData tmp = {};
 			lexer::Token curToken = {};
+			int mov = 0;
+			int count = 0;
 			while (!stateQ.empty()) {
 				PPDA::QueueData qData = stateQ.front();
 
@@ -1154,7 +1156,9 @@ namespace assembler {
 
 				PRET ret = parserPDA.run(stateQ, curToken.type);
 
+				mov++;
 				if (ret == PRET::NoTransition) {
+					count++;
 					if (qData.id == len && qData.cur == S::success) {
 						curState = qData.cur;
 						tracker = qData.tracker;
@@ -1168,6 +1172,8 @@ namespace assembler {
 					}
 				}
 			}
+			std::cout << "mov: " << mov << std::endl;
+			std::cout << "end: " << count << std::endl;
 			
 			Tree* cur = new Tree;
 			cur->prev = NULL;
