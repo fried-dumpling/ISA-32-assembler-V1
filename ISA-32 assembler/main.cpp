@@ -97,7 +97,7 @@ namespace assembler {
 
 				for (auto it = range.first; it != range.second; it++) {
 					if (it->second.rule.function(data)) {
-						inputQ.push({ it->second.end, QD.id + it->second.rule.increment, it});
+						inputQ.push({ it->second.end, QD.id + it->second.rule.increment, it });
 						moved = true;
 					}
 				}
@@ -105,7 +105,7 @@ namespace assembler {
 				if (!moved) {
 					return ReturnData::NoTransition;
 				}
-				
+
 				return ReturnData::Success;
 			}
 		};
@@ -117,9 +117,8 @@ namespace assembler {
 			public:
 				bool increment;
 				bool pop;
-				SK popData;
 				std::vector<SK> pushList;
-				std::function<bool(IN)> function;
+				std::function<bool(IN, SK)> function;
 			};
 
 			typedef struct _TransitionData {
@@ -128,7 +127,7 @@ namespace assembler {
 			}TransitionData;
 
 			typedef struct _QueueData {
-				using TransitionIT = typename std::multimap<SK, TransitionData>::iterator;
+				using TransitionIT = typename std::multimap<ST, TransitionData>::iterator;
 				typedef struct _QueueDataRD {
 					ST cur;
 					size_t id;
@@ -166,7 +165,7 @@ namespace assembler {
 
 		private:
 			std::map<ST, bool> states;
-			std::map<ST, std::multimap<SK, TransitionData>> transitions;
+			std::multimap<ST, TransitionData> transitions;
 
 			void addState(ST state, bool end) {
 				if (this->states.find(state) != this->states.end())
@@ -175,13 +174,7 @@ namespace assembler {
 			}
 
 			void addTransition(ST start, ST end, Rule rule) {
-				auto it = this->transitions.find(start);
-				if (it == this->transitions.end()) {
-					this->transitions.insert({ start, {} });
-				}
-				it = this->transitions.find(start);
-
-				it->second.insert({ rule.popData, {end, rule} });
+				this->transitions.insert({ start, {end, rule} });
 			}
 
 		public:
@@ -216,25 +209,22 @@ namespace assembler {
 				bool moved = false;
 
 				for (auto it = range.first; it != range.second; it++) {
-					auto rangeSec = it->second.equal_range(((QD.stack.empty()) ? (SK)-1 : QD.stack.top()));
-					for (auto si = rangeSec.first; si != rangeSec.second; si++) {
-						if (si->second.rule.function(data)) {
-							QueueData tmp = {};
-							tmp.cur = si->second.end;
-							tmp.stack = QD.stack;
-							tmp.id = QD.id + si->second.rule.increment;
-							tmp.transition = si;
-							tmp.tracker = QD.tracker;
-							tmp.tracker.push_back({ QD.cur, QD.id, tmp.transition });
-							if (si->second.rule.pop && !tmp.stack.empty())
-								tmp.stack.pop();
-							if (!si->second.rule.pushList.empty()) {
-								for (auto ti = si->second.rule.pushList.begin(); ti != si->second.rule.pushList.end(); ti++)
-									tmp.stack.push(*ti);
-							}
-							inputQ.push(tmp);
-							moved = true;
+					if (it->second.rule.function(data, ((QD.stack.empty()) ? (SK)-1 : QD.stack.top()))) {
+						QueueData tmp = {};
+						tmp.cur = it->second.end;
+						tmp.stack = QD.stack;
+						tmp.id = QD.id + it->second.rule.increment;
+						tmp.transition = it;
+						tmp.tracker = QD.tracker;
+						tmp.tracker.push_back({ QD.cur, QD.id, tmp.transition });
+						if (it->second.rule.pop && !tmp.stack.empty())
+							tmp.stack.pop();
+						if (!it->second.rule.pushList.empty()) {
+							for (auto si = it->second.rule.pushList.begin(); si != it->second.rule.pushList.end(); si++)
+								tmp.stack.push(*si);
 						}
+						inputQ.push(tmp);
+						moved = true;
 					}
 				}
 
@@ -1030,6 +1020,7 @@ namespace assembler {
 			{S::success, false}
 			},
 
+			/*
 			{
 			{S::start, S::run, {false, false, T::__notusing__, {T::__success__, T::__start__}, [](TT t)->bool {return true; }}},
 			{S::run, S::success, {false, true, T::__success__, {}, [](TT t)->bool {return true; }}},
@@ -1128,7 +1119,7 @@ namespace assembler {
 			{ S::run, S::run, {true, true, T::__operatorL3__, {}, [](TT t)->bool {return (t == TT::star || t == TT::slash); }}},
 			{ S::run, S::run, {true, true, T::__operatorL2__, {}, [](TT t)->bool {return (t == TT::dstar); }}},
 			{ S::run, S::run, {true, true, T::__operatorL1__, {}, [](TT t)->bool {return (t == TT::tilde); }}},
-			}
+			}*/
 		};
 
 		PPDA parserPDA(parserTable);
