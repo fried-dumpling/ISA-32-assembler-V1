@@ -285,11 +285,8 @@ namespace assembler {
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
 
 				{ "(#.*)|(#\\*.*\\*\\#)", TokenType::comment },
-				{ "[ \\t]+", TokenType::whitespace },
+				{ "[ \t]+", TokenType::whitespace },
 				{ "\n", TokenType::newline }
-			},
-			{
-				{ "[^ ]*", TokenType::unknown }
 			}
 		};
 
@@ -710,6 +707,8 @@ int main() {
 	while (file.get(c)) {
 		buff.push_back(c);
 	}
+	file.close();
+
 	if (buff.back() != '\n')
 		buff.push_back('\n');
 
