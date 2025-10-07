@@ -218,6 +218,8 @@ namespace lexer_generator {
 				using MAP = std::unordered_map<ID, ID>;
 
 				Graph graph;
+				graph.start = graph.set.genID();
+				graph.end.insert(graph.set.genID());
 				MAP idMap1, idMap2;
 				createMap(idMap1, graph.set, A.set);
 				createMap(idMap2, graph.set, B.set);
@@ -228,10 +230,9 @@ namespace lexer_generator {
 				for (auto it = B.transitions.begin(); it != B.transitions.end(); ++it)
 					graph.transitions.push_back({ idMap2[it->from], idMap2[it->to], it->symbols, it->epsilon });
 
-				graph.start = idMap1[A.start];
-				graph.transitions.push_back({ idMap1[A.start], idMap2[B.start], 0, true });
+				graph.transitions.push_back({ graph.start, idMap1[A.start], 0, true });
+				graph.transitions.push_back({ graph.start, idMap2[B.start], 0, true });
 
-				graph.end.insert(graph.set.genID());
 				for (auto it = A.end.begin(); it != A.end.end(); ++it)
 					graph.transitions.push_back({ idMap1[*it], *graph.end.begin(), 0, true });
 				for (auto it = B.end.begin(); it != B.end.end(); ++it)
@@ -244,6 +245,7 @@ namespace lexer_generator {
 				using MAP = std::unordered_map<ID, ID>;
 
 				Graph graph;
+				graph.start = graph.set.genID();
 				std::vector<MAP> idMaps;
 				for (auto it = graphs.begin(); it != graphs.end(); ++it) {
 					idMaps.push_back(MAP());
@@ -257,10 +259,8 @@ namespace lexer_generator {
 					index++;
 				}
 
-				graph.start = idMaps[0][graphs[0].start];
-				for (index = 1; index < graphs.size(); index++)
-					graph.transitions.push_back({ idMaps[index - 1][graphs[index - 1].start], idMaps[index][graphs[index].start], 0, true });
-
+				for (index = 0; index < graphs.size(); index++)
+					graph.transitions.push_back({ graph.start, idMaps[index][graphs[index].start], 0, true });
 
 				index = 0;
 				for (auto it = graphs.begin(); it != graphs.end(); ++it) {
