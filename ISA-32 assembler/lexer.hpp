@@ -117,9 +117,10 @@ namespace lexer_generator {
 
 		void print(Graph& NFA) {
 			std::cout << "start: " << NFA.start << std::endl;
-			for (auto it = NFA.end.begin(); it != NFA.end.end(); ++it)
-				std::cout << "end: " << *it << std::endl;
 			int count = 0;
+			for (auto it = NFA.end.begin(); it != NFA.end.end(); ++it)
+				std::cout << "end" << count++ << ": " << *it << std::endl;
+			count = 0;
 			for (auto it = NFA.transitions.begin(); it != NFA.transitions.end(); ++it) {
 				std::cout << "transition" << count++ << " | from: " << it->from << ", to: " << it->to << ", symbol: ";
 				if (it->epsilon)
@@ -261,6 +262,7 @@ namespace lexer_generator {
 
 				for (index = 0; index < graphs.size(); index++)
 					graph.transitions.push_back({ graph.start, idMaps[index][graphs[index].start], 0, true });
+
 
 				index = 0;
 				for (auto it = graphs.begin(); it != graphs.end(); ++it) {
@@ -571,10 +573,8 @@ namespace lexer_generator {
 			namespace functions {
 				Graph gen_dot(void) {
 					Graph graph;
-					graph.start = 0; graph.set.genID(0);
-					for (int i = 0; i < 128; i++) {
-						graph = junction(graph, create(i));
-					}
+					std::bitset<128> symbols; symbols.set();
+					graph = createClass(symbols);
 
 					return graph;
 				}
@@ -951,9 +951,7 @@ namespace lexer_generator {
 					return it->second;
 				}
 
-				inline void replace(Graph& graph, std::unordered_map<ID, ID>& sccMap) {
-					Graph out;
-
+				inline void replace(Graph& out, const Graph& graph, std::unordered_map<ID, ID>& sccMap) {
 					out.start = replaceScc(graph.start, sccMap);
 					for (auto it = graph.end.begin(); it != graph.end.end(); ++it)
 						out.end.insert(replaceScc(*it, sccMap));
@@ -981,12 +979,10 @@ namespace lexer_generator {
 					graph.set.getAll(tmpSet);
 					for (auto it = tmpSet.begin(); it != tmpSet.end(); ++it)
 						out.set.genID(replaceScc(*it, sccMap));
-
-					graph = out;
 				}
 			}
 
-			int ConvertDFA(Graph& graph, std::unordered_map<ID, ID>& endMap) {
+			int ConvertDFA(Graph& graph, std::unordered_multimap<ID, ID>& endMap) {
 				using namespace convertDfaUtil;
 				Graph out;
 
@@ -997,20 +993,22 @@ namespace lexer_generator {
 				}
 
 				std::unordered_map<ID, ID> sccMap;
+				Graph tGraph;
+
 				tarjan(sccMap, epsilonMap);
-				replace(graph, sccMap);
+				replace(tGraph, graph, sccMap);
 
 				std::unordered_multimap<ID, ID> revEpsilonMap;
 				std::unordered_map<ID, std::multimap<char, ID>> transitionMap;
 				std::unordered_map<ID, int> epsilonLeft;
 				std::unordered_set<ID> noTransition;
 
-				getTransitionData(revEpsilonMap, transitionMap, epsilonLeft, noTransition, graph);
+				getTransitionData(revEpsilonMap, transitionMap, epsilonLeft, noTransition, tGraph);
 
 				std::unordered_set<ID> epsilonEndSet;
 				for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it)
 					epsilonEndSet.insert(it->first);
-				for (auto it = graph.end.begin(); it != graph.end.end(); ++it)
+				for (auto it = tGraph.end.begin(); it != tGraph.end.end(); ++it)
 					epsilonEndSet.insert(*it);
 
 				std::unordered_map<ID, std::pair<u64, u64>> compressMap;
@@ -1019,7 +1017,7 @@ namespace lexer_generator {
 
 				u64 maxID = 0;
 
-				getBitsMaps(compressMap, decompressMap, revEpsilonMap, epsilonEndSet, graph);
+				getBitsMaps(compressMap, decompressMap, revEpsilonMap, epsilonEndSet, tGraph);
 
 				typedef struct _EQData {
 					ID cur, prev;
@@ -1073,7 +1071,7 @@ namespace lexer_generator {
 
 				std::cout << "epsilonMap:" << std::endl;
 				for (auto it = revEpsilonMap.begin(); it != revEpsilonMap.end(); ++it) {
-					std::cout << it->second << ": " << it->first <<  std::endl;
+					std::cout << it->second << ": " << it->first << std::endl;
 				}
 
 				std::cout << "epsilonEndSet:" << std::endl;
@@ -1094,8 +1092,14 @@ namespace lexer_generator {
 				std::cout << "bitsMap:" << std::endl;
 				for (auto it = bitsMap.begin(); it != bitsMap.end(); ++it) {
 					std::cout << it->first << ": ";
-					for (auto si = it->second.first.begin(); si != it->second.first.end(); ++si)
-						std::cout << *si;
+					for (auto si = it->second.first.rbegin(); si != it->second.first.rend(); ++si) {
+						if (*si)
+							std::cout << std::hex << *si << std::dec;
+						else {
+							if (si != it->second.first.rbegin())
+								std::cout << "0000000000000000";
+						}
+					}
 					std::cout << ", " << it->second.second << std::endl;
 				}*/
 
@@ -1148,8 +1152,8 @@ namespace lexer_generator {
 				ID startID = setIdSet.genID();
 
 				std::map<u64, std::vector<u64>> startBits = {};
-				u64 startShift = bitsMap[graph.start].second;
-				for (auto it = bitsMap[graph.start].first.begin(); it != bitsMap[graph.start].first.end(); ++it)
+				u64 startShift = bitsMap[tGraph.start].second;
+				for (auto it = bitsMap[tGraph.start].first.begin(); it != bitsMap[tGraph.start].first.end(); ++it)
 					startBits[startShift].push_back(*it);
 
 				subsetMap[startBits] = startID;
@@ -1161,14 +1165,14 @@ namespace lexer_generator {
 					std::unordered_map<char, std::unordered_set<ID>> gotoMap;
 					for (auto it = cur.cur.begin(); it != cur.cur.end(); ++it) {
 						for (u64 i = 0; i < it->second.size(); i++) {
-							u64 cur = it->second[i >> 6];
-							for (int j = 0; j < 64 && cur; j++) {
-								if (cur & 0b1) {
-									ID curTrueID = decompressMap[i + j + it->first];
+							u64 bit = it->second[i];
+							for (int j = 0; j < 64 && bit; j++) {
+								if (bit & 0b1) {
+									ID curTrueID = decompressMap[(i << 6) + j + it->first];
 									for (auto it = transitionMap[curTrueID].begin(); it != transitionMap[curTrueID].end(); ++it)
 										gotoMap[it->first].insert(it->second);
 								}
-								cur >>= 1;
+								bit >>= 1;
 							}
 						}
 					}
@@ -1199,10 +1203,14 @@ namespace lexer_generator {
 				}
 
 				std::unordered_map<u64, std::unordered_set<u64>> endSet;
-				for (auto it = graph.end.begin(); it != graph.end.end(); ++it) {
+				for (auto it = tGraph.end.begin(); it != tGraph.end.end(); ++it) {
 					std::pair<u64, u64>& comp = compressMap[*it];
 					endSet[comp.second].insert(comp.first);
 				}
+
+				std::unordered_multimap<ID, ID> rSccMap;
+				for (auto it = sccMap.begin(); it != sccMap.end(); ++it)
+					rSccMap.insert({ it->second, it->first });
 
 				out.start = 0;
 
@@ -1210,7 +1218,6 @@ namespace lexer_generator {
 					out.set.genID(i);
 
 				for (auto it = subsetMap.begin(); it != subsetMap.end(); ++it) {
-					bool isEnd = false;
 					for (auto si = endSet.begin(); si != endSet.end(); ++si) {
 						if (it->first.find(si->first) == it->first.end())
 							continue;
@@ -1223,12 +1230,18 @@ namespace lexer_generator {
 								continue;
 							if (vec[*ti >> 6] & (u64(1) << (*ti & 0b111111))) {
 								out.end.insert(it->second);
-								endMap[it->second] = decompressMap[*ti + si->first];
-								isEnd = true;
+
+								ID id = decompressMap[*ti + si->first];
+								auto range = rSccMap.equal_range(id);
+
+								if (range.first == range.second)
+									endMap.insert({ it->second, id });
+								for (auto qi = range.first; qi != range.second; ++qi)
+									endMap.insert({ it->second, qi->second });
+
 								break;
 							}
 						}
-						if (isEnd) break;
 					}
 				}
 
@@ -1322,9 +1335,13 @@ namespace lexer_generator {
 		using ID = graph::ID;
 		using Table = table::DFATable;
 
+		typedef struct _EndData {
+			TokenType token;
+			u64 priority;
+		} EndData;
+
 		Table dfaTable;
-		std::unordered_map<ID, u64> endPriority;
-		std::unordered_map<ID, TokenType> endToken;
+		std::unordered_multimap<ID, EndData> endMap;
 
 	public:
 		typedef struct _Token {
@@ -1361,9 +1378,11 @@ namespace lexer_generator {
 					endPoint = { TokenType(-1), 0, it, 0 };
 					state = 0;
 				}
-				if (this->endPriority.find(state) != this->endPriority.end()) {
-					if (endPoint.len < curString.size() || (endPoint.len == curString.size() && endPoint.priority > this->endPriority[state])) {
-						endPoint = { this->endToken[state], curString.size(), it, this->endPriority[state] };
+				if (this->endMap.find(state) != this->endMap.end()) {
+					auto range = this->endMap.equal_range(state);
+					for (auto si = range.first; si != range.second; ++si) {
+						if (endPoint.len < curString.size() || (endPoint.len == curString.size() && endPoint.priority > si->second.priority))
+							endPoint = { si->second.token, curString.size(), it, si->second.priority };
 					}
 				}
 			}
@@ -1392,15 +1411,11 @@ namespace lexer_generator {
 			u64 priority;
 		} Rule;
 
-		typedef struct _EndData {
-			TokenType token;
-			u64 priority;
-		} EndData;
-
 		using Graph = graph::Graph;
+		using EndData = typename Lexer<TokenType>::EndData;
 
 		std::vector<Rule> rules;
-		std::unordered_map<ID, EndData> endDatas;
+		std::unordered_multimap<ID, EndData> endDatas;
 		Table dfaTable;
 
 	public:
@@ -1438,17 +1453,27 @@ namespace lexer_generator {
 				NFAs.push_back(NFA);
 				for (auto si = NFA.end.begin(); si != NFA.end.end(); ++si)
 					NFAendDatas[graphID][*si] = { it->token, it->priority };
+
 				graphID++;
 			}
 
 			std::unordered_map<ID, std::pair<ID, ID>> nfaEndMap;
-			std::unordered_map<ID, ID> dfaEndMap;
+			std::unordered_multimap<ID, ID> dfaEndMap;
 
 			Graph DFA = graph::generate::split(NFAs, nfaEndMap);
 			regex::converter::ConvertDFA(DFA, dfaEndMap);
 
-			for (auto it = dfaEndMap.begin(); it != dfaEndMap.end(); ++it)
-				this->endDatas[it->first] = NFAendDatas[nfaEndMap[it->second].first][nfaEndMap[it->second].second];
+			for (auto it = dfaEndMap.begin(); it != dfaEndMap.end();) {
+				if (nfaEndMap.find(it->second) == nfaEndMap.end())
+					it = dfaEndMap.erase(it);
+				else
+					++it;
+			}
+
+			for (auto it = dfaEndMap.begin(); it != dfaEndMap.end(); ++it) {
+				EndData tmp = NFAendDatas[nfaEndMap[it->second].first][nfaEndMap[it->second].second];
+				this->endDatas.insert({ it->first, tmp });
+			}
 
 			this->dfaTable = table::createTable(DFA);
 		}
@@ -1456,10 +1481,8 @@ namespace lexer_generator {
 		Lexer<TokenType> create(void) {
 			Lexer<TokenType> out;
 			out.dfaTable = this->dfaTable;
-			for (auto it = this->endDatas.begin(); it != this->endDatas.end(); it++) {
-				out.endToken[it->first] = it->second.token;
-				out.endPriority[it->first] = it->second.priority;
-			}
+			for (auto it = this->endDatas.begin(); it != this->endDatas.end(); ++it)
+				out.endMap.insert({ it->first, it->second });
 
 			return out;
 		}
