@@ -190,7 +190,7 @@ namespace assembler {
 
 			unknown = -1
 		};
-	
+
 		using LexerFactoy = lexer_generator::LexerFactory<TokenType>;
 		using LFCD = LexerFactoy::CreateData;
 		using Lexer = lexer_generator::Lexer<TokenType>;
@@ -288,6 +288,96 @@ namespace assembler {
 				{ "[ \t]+", TokenType::whitespace },
 				{ "\n", TokenType::newline }
 			}
+		};
+
+		std::unordered_map<TokenType, std::string> tokenStr{
+			{ TokenType::add, "add" },
+			{ TokenType::addc, "addc" },
+			{ TokenType::addi, "addi" },
+			{ TokenType::sub, "sub" },
+			{ TokenType::subc, "subc" },
+			{ TokenType::subi, "subi" },
+			{ TokenType::bxr, "bxr" },
+			{ TokenType::bxri, "bxri" },
+			{ TokenType::bor, "bor" },
+			{ TokenType::bori, "bori" },
+			{ TokenType::bnd, "bnd" },
+			{ TokenType::bndi, "bndi" },
+			{ TokenType::shiftl, "shiftl" },
+			{ TokenType::shiftr, "shiftr" },
+			{ TokenType::shiftli, "shiftli" },
+			{ TokenType::shiftri, "shiftri" },
+			{ TokenType::cmp, "cmp" },
+			{ TokenType::mov, "mov" },
+			{ TokenType::set, "set" },
+			{ TokenType::push, "push" },
+			{ TokenType::pop, "pop" },
+			{ TokenType::ld, "ld" },
+			{ TokenType::st, "st" },
+			{ TokenType::jmp, "jmp" },
+			{ TokenType::call, "call" },
+			{ TokenType::ret, "ret" },
+			{ TokenType::nop, "nop" },
+			{ TokenType::halt, "halt" },
+
+			{ TokenType::reg, "reg" },
+			{ TokenType::gen, "gen" },
+			{ TokenType::sbp, "sbp" },
+			{ TokenType::zero, "zero" },
+			{ TokenType::one, "one" },
+			{ TokenType::full, "full" },
+			{ TokenType::pc, "pc" },
+			{ TokenType::stack, "stack" },
+			{ TokenType::flag, "flag" },
+
+			{ TokenType::neg, "neg" },
+			{ TokenType::pos, "pos" },
+			{ TokenType::carry, "carry" },
+			{ TokenType::carry4, "carry4" },
+			{ TokenType::overflow, "overflow" },
+
+			{ TokenType::_32B_, "32B" },
+			{ TokenType::_16L_, "16L" },
+			{ TokenType::_8L_, "8L" },
+			{ TokenType::_8H_, "8H" },
+			{ TokenType::_16H_, "16H" },
+			{ TokenType::_S16L_, "S16L" },
+			{ TokenType::_S8L_, "S8L" },
+			{ TokenType::_S8H_, "S8H" },
+
+			{ TokenType::text, ".text" },
+			{ TokenType::data, ".data" },
+			{ TokenType::bss, ".bss" },
+
+			{ TokenType::dot, "dot" },
+			{ TokenType::openparen, "openparen" },
+			{ TokenType::closeparen, "closeparen" },
+			{ TokenType::openbrack, "openbrack" },
+			{ TokenType::closebrack, "closebrack" },
+
+			{ TokenType::colon, "colon" },
+			{ TokenType::semicolon, "semicolon" },
+			{ TokenType::plus, "plus" },
+			{ TokenType::minus, "minus" },
+			{ TokenType::dstar, "dstar" },
+			{ TokenType::star, "star" },
+			{ TokenType::slash, "slash" },
+			{ TokenType::percent, "percent" },
+			{ TokenType::tilde, "tilde" },
+			{ TokenType::ampersend, "ampersend" },
+			{ TokenType::verticalbar, "verticalbar" },
+			{ TokenType::caret, "caret" },
+
+			{ TokenType::hexnum, "hexnum" },
+			{ TokenType::decnum, "decnum" },
+			{ TokenType::octnum, "octnum" },
+			{ TokenType::binnum, "binnum" },
+			{ TokenType::comment, "comment" },
+			{ TokenType::whitespace, "whitespace" },
+
+			{ TokenType::newline, "newline" },
+			{ TokenType::identifier, "identifier" },
+			{ TokenType::unknown, "unknown" }
 		};
 
 		LexerFactoy lexerFactory;
@@ -734,7 +824,7 @@ int main() {
 				si++;
 		}
 		tmp.push_back('\t');
-		cout << tmp << "; " << ((it->type == TokenType::unknown) ? "error" : "fine") << endl;
+		cout << tmp << "; " << ((it->type == TokenType::unknown) ? "error" : lexer::tokenStr[it->type]) << endl;
 	}
 	cout << "------------------------------------------------------------" << endl;
 
