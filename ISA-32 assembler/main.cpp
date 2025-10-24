@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "lexer.hpp"
+#include "parser.hpp"
 
 using namespace std;
 
@@ -142,7 +143,7 @@ namespace assembler {
 	}
 
 	namespace lexer {
-		enum class TokenType {
+		TOKENSTART(TokenType)
 			add, addc, addi,
 			sub, subc, subi,
 			bxr, bxri,
@@ -187,16 +188,14 @@ namespace assembler {
 			newline,
 
 			identifier,
-
-			unknown = -1
-		};
+		TOKENEND();
 
 		using LexerFactoy = lexer_generator::LexerFactory<TokenType>;
 		using LFCD = LexerFactoy::CreateData;
 		using Lexer = lexer_generator::Lexer<TokenType>;
 		using Token = Lexer::Token;
 
-		LFCD CreateData = {
+		const LFCD CreateData = {
 			{
 				{ "add", TokenType::add },
 				{ "addc", TokenType::addc },
@@ -284,7 +283,7 @@ namespace assembler {
 
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
 
-				{ "(#.*)|(#\\*.*\\*\\#)", TokenType::comment },
+				{ "(;[^\n]*)|(##.*##)", TokenType::comment },
 				{ "[ \t]+", TokenType::whitespace },
 				{ "\n", TokenType::newline }
 			}
@@ -377,13 +376,15 @@ namespace assembler {
 
 			{ TokenType::newline, "newline" },
 			{ TokenType::identifier, "identifier" },
-			{ TokenType::unknown, "unknown" }
+
+			{ TokenType::__epsilon, "epsilon" },
+			{ TokenType::__unknown, "unknown" }
 		};
 
 		LexerFactoy lexerFactory;
 		Lexer lexer;
 
-		void createLexer(void) {
+		inline void createLexer(void) {
 			lexerFactory.setRules(CreateData);
 			lexerFactory.update();
 			lexer = lexerFactory.create();
@@ -678,7 +679,7 @@ namespace assembler {
 			while (!stateQ.empty()) {
 				PPDA::QueueData qData = stateQ.front();
 
-				curToken = { " ", lexer::TokenType::unknown };
+				curToken = { " ", lexer::TokenType::__unknown };
 				if (qData.id < len)
 					curToken = tokens[qData.id];
 
@@ -711,7 +712,7 @@ namespace assembler {
 			for (auto it = tracker.begin(); it != tracker.end(); it++) {
 				auto track = *it;
 				cur->child = {};
-				cur->token = (0 <= track.id && track.id < len) ? tokens[track.id] : lexer::Token({ "u.k", {TT::unknown } });
+				cur->token = (0 <= track.id && track.id < len) ? tokens[track.id] : lexer::Token({ "u.k", {TT::__unknown } });
 				cur->it = cur->child.end();
 				if (track.transition->second.rule.pushList.empty() && track.transition->second.rule.pop) {
 					if (!cur)
@@ -824,7 +825,7 @@ int main() {
 				si++;
 		}
 		tmp.push_back('\t');
-		cout << tmp << "; " << ((it->type == TokenType::unknown) ? "error" : lexer::tokenStr[it->type]) << endl;
+		cout << tmp << "; " << ((it->type == TokenType::__unknown) ? "error" : lexer::tokenStr[it->type]) << endl;
 	}
 	cout << "------------------------------------------------------------" << endl;
 

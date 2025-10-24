@@ -3,10 +3,8 @@
 
 #include <iostream>
 
-#include <functional>
 #include <string>
 #include <vector>
-#include <list>
 
 #include <map>
 #include <set>
@@ -16,9 +14,11 @@
 
 #include <queue>
 #include <stack>
-#include <deque>
 
 #include <utility>
+
+#define TOKENSTART(name) enum class name { __unknown = -1, __epsilon = 0,
+#define TOKENEND() __end }
 
 namespace lexer_generator {
 	namespace graph {
@@ -700,9 +700,12 @@ namespace lexer_generator {
 					switch (it->type) {
 					case TokenType::CLASS_OPEN:
 					case TokenType::INVCLASS_OPEN:
-					case TokenType::DOT:
 					case TokenType::CHAR: {
 						stack.push(EqData(*it));
+						break;
+					}
+					case TokenType::DOT: {
+						stack.push(EqData(gen_dot()));
 						break;
 					}
 					case TokenType::CLASS_CLOSE: {
@@ -1054,7 +1057,7 @@ namespace lexer_generator {
 						epsilonQ.push({ it->second, cur.cur, cur.shift });
 					}
 				}
-
+					 
 				/*
 				std::cout << "sccMap:" << std::endl;
 				for (auto it = sccMap.begin(); it != sccMap.end(); ++it) {
@@ -1418,11 +1421,24 @@ namespace lexer_generator {
 		std::unordered_multimap<ID, EndData> endDatas;
 		Table dfaTable;
 
+		void clearTable(void) {
+			if (this->dfaTable.table != NULL) {
+				for (size_t i = 0; i < this->dfaTable.size; i++)
+					delete[] this->dfaTable.table[i];
+				delete[] this->dfaTable.table;
+			}
+			this->dfaTable.size = 0;
+			this->dfaTable.table = NULL;
+		}
 	public:
 		LexerFactory(void) {
 			this->rules.clear();
 			this->dfaTable.size = 0;
 			this->dfaTable.table = NULL;
+		}
+
+		~LexerFactory() {
+			this->clearTable();
 		}
 
 		void setRules(const CreateData& data) {
@@ -1437,8 +1453,7 @@ namespace lexer_generator {
 		}
 
 		void update(void) {
-			this->dfaTable.size = 0;
-			this->dfaTable.table = NULL;
+			this->clearTable();
 
 			std::unordered_map<ID, std::unordered_map<ID, EndData>> NFAendDatas;
 			std::vector<Graph> NFAs;
