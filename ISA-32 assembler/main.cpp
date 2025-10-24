@@ -787,11 +787,18 @@ void printTree(Tree* pTree, std::vector<vector<vector<Tree*>>>& out, std::vector
 	tmp[level]++;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 	lexer::createLexer();
 
 	ifstream file;
-	file.open("input.txt");
+	file.open(argv[1]);
+
+	std::cout << argc << std::endl;
+	std::cout << argv[0] << std::endl;
+	std::cout << argv[1] << std::endl;
+
+	if (!file.is_open() || !file.good())
+		return -1;
 
 	string buff;
 	char c;
@@ -815,14 +822,31 @@ int main() {
 	for (auto it = tokens.begin(); it != tokens.end(); it++) {
 		string tmp = it->text;
 		for (auto si = tmp.begin(); si != tmp.end(); ) {
-			if (*si == '\n') {
-				si = tmp.erase(si);
+			switch (*si) {
+			case '\n':
+				si = tmp.erase(si);	
 				si = tmp.insert(si, '\\');
 				si++;
 				si = tmp.insert(si, 'n');
-			}
-			else
+				break;
+			case '\t':
+				si = tmp.erase(si);
+				si = tmp.insert(si, '\\');
 				si++;
+				si = tmp.insert(si, 't');
+				break;
+			case ' ':
+				si = tmp.erase(si);
+				si = tmp.insert(si, '\'');
+				si++;
+				si = tmp.insert(si, ' ');
+				si++;
+				si = tmp.insert(si, '\'');
+				break;
+			default:
+				si++;
+				break;
+			}
 		}
 		tmp.push_back('\t');
 		cout << tmp << "; " << ((it->type == TokenType::__unknown) ? "error" : lexer::tokenStr[it->type]) << endl;

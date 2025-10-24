@@ -1141,7 +1141,7 @@ namespace lexer_generator {
 					}
 				} LessIDbit;
 
-				UIDSet setIdSet;
+				ID setId = 0;
 				std::map<std::map<u64, std::vector<u64>>, ID, LessIDbit> subsetMap;
 				std::unordered_map<ID, std::unordered_map<ID, std::bitset<128>>> subsetTransitionMap;
 
@@ -1152,7 +1152,7 @@ namespace lexer_generator {
 
 				std::queue<SQData> subsetQ;
 
-				ID startID = setIdSet.genID();
+				ID startID = setId++;
 
 				std::map<u64, std::vector<u64>> startBits = {};
 				u64 startShift = bitsMap[tGraph.start].second;
@@ -1193,7 +1193,7 @@ namespace lexer_generator {
 
 						bool found = (subsetMap.find(set) != subsetMap.end());
 						if (!found)
-							subsetMap[set] = setIdSet.genID();
+							subsetMap[set] = setId++;
 
 						ID curID = subsetMap[set];
 						subsetTransitionMap[cur.prev][curID].set(it->first);
@@ -1217,7 +1217,7 @@ namespace lexer_generator {
 
 				out.start = 0;
 
-				for (ID i = 0; i <= setIdSet.getMax(); i++)
+				for (ID i = 0; i < setId; i++)
 					out.set.genID(i);
 
 				for (auto it = subsetMap.begin(); it != subsetMap.end(); ++it) {

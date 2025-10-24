@@ -80,6 +80,7 @@
 namespace parser_generator {
 	namespace convert {
 		using u64 = unsigned __int64;
+		using ID = u64;
 		using Element = u64;
 
 		class Item {
@@ -132,36 +133,6 @@ namespace parser_generator {
 					elementQ.push({ it->second, cur.cur });
 			}
 		}
-
-		void getLookahead(
-			std::vector<u64>& lookahead,
-			std::unordered_map<Element, std::vector<u64>>& firstTable,
-			std::vector<u64>& prevLookahead,
-			Element next) {
-
-			lookahead = firstTable[next];
-
-			if (firstTable[next][0] & 0b1) {
-				size_t size = std::max(lookahead.size(), prevLookahead.size());
-				lookahead.resize(size, 0);
-
-				for (size_t i = 0; i < size; i++)
-					lookahead[i] |= prevLookahead[i];
-			}
-		}
-
-		typedef struct _ItemLessRule {
-			bool operator() (const Item& left, const Item& right) const {
-				if (left.prodId != right.prodId) {
-					if (left.prodId < right.prodId)
-						return true;
-					return false;
-				}
-				if (left.dotPos < right.dotPos)
-					return true;
-				return false;
-			}
-		} ItemLessRule;
 
 		void getClosure(
 			std::vector<Item>& closure,
@@ -221,9 +192,83 @@ namespace parser_generator {
 			}
 		}
 
+		typedef struct _SetLessRule {
+			bool operator() (const std::vector<Item>& left, const std::vector<Item>& right) const {
+				if (left.size() < right.size())
+					return true;
+				if (left.size() > right.size())
+					return false;
+
+				auto li = left.cbegin(), ri = right.cbegin();
+				while (true) {
+					if (li->prodId != ri->prodId) {
+						if (li->prodId < ri->prodId)
+							return true;
+						return false;
+					}
+					if (li->dotPos < ri->dotPos)
+						return true;
+
+					++li; ++ri;
+				}
+				return false;
+			}
+		} SetLessRule;
+
 		void createC0(
+			std::vector<std::vector<Item>>& closureVec,
+			std::unordered_multimap<ID, ID>& transitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
 			Item startItem) {
+
+			typedef struct _QData {
+				std::vector<Item> closure;
+				ID id;
+			} QData;
+
+			ID closureId = 0;
+			ID startId = closureId++;
+			std::set<std::vector<Item>, SetLessRule> visited;
+
+			std::queue<QData> setQ;
+			std::vector<Item> startClosure;
+			std::vector<Item> startItemVec = { startItem };
+			getClosure(startClosure, grammerVec, grammerMap, startItemVec);
+			setQ.push({ startClosure, startId });
+			
+			while (!setQ.empty()) {
+				QData cur = setQ.front(); setQ.pop();
+
+				visited.insert(cur.closure);
+				closureVec.push_back(cur.closure);
+
+				std::unordered_map<Element, std::vector<Item>> gotoMap;
+				getGotoItem(gotoMap, grammerVec, cur.closure);
+				for (auto it = gotoMap.begin(); it != gotoMap.end(); ++it) {
+					std::vector<Item> closure;
+					getClosure(closure, grammerVec, grammerMap, it->second);
+
+					if (visited.find(cur.closure) != visited.end())
+						continue;
+
+					ID id = closureId++;
+					transitionMap.insert({ cur.id, id });
+
+					setQ.push({ closure, id });
+				}
+			}
+		}
+
+		void getLookahead(
+			std::vector<Element>& lookahead,
+			std::vector<std::vector<Item>>& closureVec,
+			std::unordered_multimap<ID, ID>& transitionMap,
+			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
+			ID closureID, u64 itemNum) {
+
+
 		}
 
 		void createTable() {
