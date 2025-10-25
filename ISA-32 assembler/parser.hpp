@@ -99,7 +99,7 @@ namespace parser_generator {
 		template <typename NonTerminal, typename Terminal>
 		using Grammer = std::unordered_map < NonTerminal, std::vector<Element>> ;
 
-		void getClosure(
+		inline void getClosure(
 			std::vector<Item>& closure,
 			std::vector<std::pair<Element, std::vector<Element>>> &grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
@@ -145,7 +145,7 @@ namespace parser_generator {
 			}
 		}
 
-		void getGotoItem(
+		inline void getGotoItem(
 			std::unordered_map<Element, std::vector<Item>>& gotoMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::vector<Item>& closure) {
@@ -180,7 +180,7 @@ namespace parser_generator {
 			}
 		} SetLessRule;
 
-		void createC0(
+		inline void createC0(
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_multimap<ID, std::pair<ID, Element>>& transitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
@@ -225,7 +225,7 @@ namespace parser_generator {
 			}
 		}
 
-		void getFirstTable(
+		inline void getFirstTable(
 			std::unordered_map<Element, std::vector<u64>>& table,
 			std::unordered_multimap<Element, Element>& revFirstGrammmer,
 			Element terminalEnd) {
@@ -281,7 +281,7 @@ namespace parser_generator {
 		//	LA(p, [A->x.y]) = first(b) + LA(q, [B->aAb]);
 		// 
 
-		void getLookahead(
+		inline void getLookahead(
 			std::vector<u64>& lookahead,
 			std::vector<u64>& nextLookahead,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
@@ -298,24 +298,18 @@ namespace parser_generator {
 				for (auto si = q.begin(); si != q.end(); ++si) {
 					std::vector<Element>& rhs = grammerVec[si->prodId].second;
 
-					if (rhs.size() == si->dotPos + 1)
-						goto first_epsilon;
-
-					{
+					if (rhs.size() > si->dotPos + 1) {
 						std::vector<u64>& first = firstTable[rhs[si->dotPos + 1]];
-						if (!first.size())
-							goto first_epsilon;
-						if (first[0] & 0b1)
-							goto first_epsilon;
+						if (first.size()) {
+							if (!(first[0] & 0b1)) {
+								lookahead.resize(std::max(lookahead.size(), first.size()), 0);
+								for (size_t i = 0; i < first.size(); i++)
+									lookahead[i] |= first[i];
 
-						lookahead.resize(std::max(lookahead.size(), first.size()), 0);
-						for (size_t i = 0; i < first.size(); i++)
-							lookahead[i] |= first[i];
+								continue;
+							}
+						}
 					}
-
-					continue;
-
-				first_epsilon:
 					lookahead.resize(std::max(lookahead.size(), nextLookahead.size()), 0);
 					for (size_t i = 0; i < nextLookahead.size(); i++)
 						lookahead[i] |= nextLookahead[i];
@@ -323,13 +317,17 @@ namespace parser_generator {
 			}
 		}
 
-		void setLookahead(
+		inline void setLookahead(
 			std::vector<std::unordered_set<Element>>& lookaheadSet,
 			std::vector<std::vector<Item>>& c0graph,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
 			std::unordered_map<Element, std::vector<u64>>& firstTable) {
+
+			for () {
+				getLookahead();
+			}
 		}
 
 		void createTable(std::vector<std::pair<Element, std::vector<Element>>>& grammerVec) {
