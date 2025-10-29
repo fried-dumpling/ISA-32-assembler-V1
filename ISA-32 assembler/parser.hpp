@@ -87,7 +87,7 @@ namespace parser_generator {
 		public:
 			u64 prodId;
 			u64 dotPos;
-			u64 setId;
+			u64 lookaheadId;
 		};
 
 		class Rule {
@@ -100,6 +100,7 @@ namespace parser_generator {
 		using Grammer = std::unordered_map < NonTerminal, std::vector<Element>> ;
 
 		inline void getClosure(
+			std::vector<u64>& reduceItems,
 			std::vector<Item>& closure,
 			std::vector<std::pair<Element, std::vector<Element>>> &grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
@@ -113,7 +114,14 @@ namespace parser_generator {
 			std::unordered_set<Element> visited;
 
 			std::queue<QData> itemQ;
+			int counter = 0;
 			for (auto it = items.begin(); it != items.end(); ++it) {
+				if (grammerVec[it->prodId].second.size() == it->dotPos) {
+					it->lookaheadId = 0;
+					reduceItems.push_back(counter++);
+					continue;
+				}
+
 				itemQ.push({ *it, *it });
 			}
 
@@ -131,6 +139,7 @@ namespace parser_generator {
 					Item tmp;
 					tmp.prodId = it->second.second;
 					tmp.dotPos = 0;
+					tmp.lookaheadId = (u64)-1;
 
 					itemQ.push({ tmp, cur.item });
 					closure.push_back(tmp);
@@ -140,7 +149,7 @@ namespace parser_generator {
 			for (auto it = items.begin(); it != items.end(); ++it) {
 				if (visited.find(grammerVec[it->prodId].first) == visited.end())
 					closure.push_back(*it);
-				else if (it->dotPos) 
+				else if (it->dotPos)
 					closure.push_back(*it);
 			}
 		}
@@ -151,7 +160,7 @@ namespace parser_generator {
 			std::vector<Item>& closure) {
 			
 			for (auto it = closure.begin(); it != closure.end(); ++it) {
-				if (it->dotPos + 1 >= grammerVec[it->prodId].second.size())
+				if (it->dotPos + 1 > grammerVec[it->prodId].second.size())
 					continue;
 				gotoMap[grammerVec[it->prodId].second[it->dotPos]].push_back({ it->prodId, it->dotPos + 1 });
 			}
@@ -181,6 +190,7 @@ namespace parser_generator {
 		} SetLessRule;
 
 		inline void createC0(
+			std::unordered_map<u64, std::vector<u64>>& reduceItem,
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_multimap<ID, std::pair<ID, Element>>& transitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
@@ -196,10 +206,12 @@ namespace parser_generator {
 			ID startId = closureId++;
 			std::set<std::vector<Item>, SetLessRule> visited;
 
+			u64 counter = 0;
+
 			std::queue<QData> setQ;
 			std::vector<Item> startClosure;
 			std::vector<Item> startItemVec = { startItem };
-			getClosure(startClosure, grammerVec, grammerMap, startItemVec);
+			getClosure(reduceItem[counter++], startClosure, grammerVec, grammerMap, startItemVec);
 			setQ.push({ startClosure, startId });
 			
 			while (!setQ.empty()) {
@@ -212,7 +224,7 @@ namespace parser_generator {
 				getGotoItem(gotoMap, grammerVec, cur.closure);
 				for (auto it = gotoMap.begin(); it != gotoMap.end(); ++it) {
 					std::vector<Item> closure;
-					getClosure(closure, grammerVec, grammerMap, it->second);
+					getClosure(reduceItem[counter++], closure, grammerVec, grammerMap, it->second);
 
 					if (visited.find(cur.closure) != visited.end())
 						continue;
@@ -261,31 +273,11 @@ namespace parser_generator {
 			}
 		}
 
-		// 
-		//	LA(p, [A->x.y]) {
-		//		set = {}
-		//		
-		//		auto range = revTransitionMap[x].equal_range(p);
-		//		for (auto qIt = range.first; qIt != range.second; ++qIt) {
-		//			q = grammerVec[*qIt];
-		//			for (auto it = q.begin(); it != q.end(); ++it) {
-		//				set.insert(firstTable[it->b]);
-		//				if (firstTable[it->b].epslon)
-		//					set.insert(LA(q, [B->a.Ab]));
-		//			}	
-		//		}
-		//	}
-		//	
-		//	q = PRED(p, x);
-		//	[B->aAb] << q;
-		//	LA(p, [A->x.y]) = first(b) + LA(q, [B->aAb]);
-		// 
-
-		inline void getLookahead(
+		inline void lookaheadHelper(
 			std::vector<u64>& lookahead,
-			std::vector<u64>& nextLookahead,
-			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
+			std::vector<std::pair<u64, u64>> ref,
 			std::vector<std::vector<Item>>& closureVec,
+			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::unordered_map<Element, std::vector<u64>>& firstTable,
 			ID closureID, Item item) {
@@ -295,38 +287,98 @@ namespace parser_generator {
 			auto range = revTransitionMap[mark].equal_range(closureID);
 			for (auto it = range.first; it != range.second; ++it) {
 				std::vector<Item>& q = closureVec[it->second];
+				u64 counter = 0;
 				for (auto si = q.begin(); si != q.end(); ++si) {
+					u64 itemId = counter++;
+					if (grammerVec[si->prodId].second[si->dotPos] != core.first)
+						continue;
+
 					std::vector<Element>& rhs = grammerVec[si->prodId].second;
-
 					if (rhs.size() > si->dotPos + 1) {
-						std::vector<u64>& first = firstTable[rhs[si->dotPos + 1]];
+						Element follow = rhs[si->dotPos + 1];
+						std::vector<u64>& first = firstTable[follow];
 						if (first.size()) {
-							if (!(first[0] & 0b1)) {
-								lookahead.resize(std::max(lookahead.size(), first.size()), 0);
-								for (size_t i = 0; i < first.size(); i++)
-									lookahead[i] |= first[i];
-
-								continue;
-							}
+							lookahead.resize(std::max(lookahead.size(), (rhs[follow] >> 6) + 1), 0);
+							lookahead[rhs[follow] >> 6] |= (u64)1 << (rhs[follow] & 0b111111);
+							if (first[0] & 0b1)
+								ref.push_back({ it->second, itemId });
+							continue;
 						}
 					}
-					lookahead.resize(std::max(lookahead.size(), nextLookahead.size()), 0);
-					for (size_t i = 0; i < nextLookahead.size(); i++)
-						lookahead[i] |= nextLookahead[i];
+					if (!lookahead.size())
+						lookahead.resize(1, 0);
+					lookahead[0] |= 1;
+					ref.push_back({ it->second, itemId });
 				}
 			}
 		}
 
-		inline void setLookahead(
-			std::vector<std::unordered_set<Element>>& lookaheadSet,
-			std::vector<std::vector<Item>>& c0graph,
+		inline void getLookahead(
+			std::vector<std::vector<u64>>& lookaheadSets,
+			std::vector<std::vector<Item>>& closureVec,
+			std::unordered_map<u64, std::vector<u64>>& reduceItem,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
 			std::unordered_map<Element, std::vector<u64>>& firstTable) {
 
-			for () {
-				getLookahead();
+			typedef struct _TableData {
+				std::vector<std::pair<u64, u64>> ref;
+				std::vector<u64> lookaheadSet;
+			} TableData;
+
+			std::unordered_map<u64, std::unordered_map<u64, TableData>> lookaheadTable;
+			std::unordered_map<u64, std::unordered_map<u64, bool>> visited;
+			std::unordered_map<u64, std::unordered_map<u64, u64>> orderMap;
+
+			typedef struct _QData {
+				u64 closureId, itemId;
+			} QData;
+
+			std::queue<QData> itemQ;
+
+			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
+				for (auto si = it->second.begin(); si != it->second.end(); ++si)
+					itemQ.push({ it->first, *si });
+			}
+
+			u64 count = 0;
+			while (!itemQ.empty()) {
+				QData cur = itemQ.front(); itemQ.pop();
+				orderMap[cur.closureId][cur.itemId] = count++;
+
+				if (visited[cur.closureId][cur.itemId])
+					continue;
+				visited[cur.closureId][cur.itemId] = true;
+				
+				std::vector<Item>& closure = closureVec[cur.closureId];
+				lookaheadHelper(lookaheadTable[cur.closureId][cur.itemId].lookaheadSet, lookaheadTable[cur.closureId][cur.itemId].ref, closureVec, revTransitionMap, grammerVec, firstTable, cur.closureId, closure[cur.itemId]);
+
+				std::vector<std::pair<u64, u64>>& ref = lookaheadTable[cur.closureId][cur.itemId].ref;
+				for (auto it = ref.begin(); it != ref.end(); ++it)
+					itemQ.push({ it->first, it->second });
+			}
+
+			std::map<u64, QData, std::greater<u64>> orderedMap;
+
+			for (auto it = orderedMap.begin(); it != orderedMap.end(); ++it) {
+				std::vector<u64>& curSet = lookaheadTable[it->second.closureId][it->second.itemId].lookaheadSet;
+
+				std::vector<std::pair<u64, u64>>& ref = lookaheadTable[it->second.closureId][it->second.itemId].ref;
+				for (auto si = ref.begin(); si != ref.end(); ++it) {
+					std::vector<u64>& lookaheadSet = lookaheadTable[si->first][si->second].lookaheadSet;
+					lookaheadSet.resize(std::max(lookaheadSet.size(), curSet.size()), 0);
+					for (u64 i = 0; i < curSet.size(); i++)
+						lookaheadSet[i] |= curSet[i];
+				}
+			}
+
+			count = 0;
+			for (auto it = lookaheadTable.begin(); it != lookaheadTable.end(); ++it) {
+				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
+					lookaheadSets.push_back(si->second.lookaheadSet);
+					closureVec[it->first][si->first].lookaheadId = count++;
+				}
 			}
 		}
 
