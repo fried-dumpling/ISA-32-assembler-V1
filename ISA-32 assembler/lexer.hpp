@@ -18,7 +18,7 @@
 #include <utility>
 
 #define TOKENSTART(name) enum class name { __unknown = -1, __epsilon = 0,
-#define TOKENEND() __end }
+#define TOKENEND() __eot, __end }
 
 namespace lexer_generator {
 	namespace graph {
@@ -1350,6 +1350,10 @@ namespace lexer_generator {
 		typedef struct _Token {
 			std::string text;
 			TokenType type;
+
+			operator TokenType() const {
+				return this->type;
+			}
 		} Token;
 
 		void lex(std::vector<Token>& tokens, std::string& text) {
@@ -1430,6 +1434,7 @@ namespace lexer_generator {
 			this->dfaTable.size = 0;
 			this->dfaTable.table = NULL;
 		}
+
 	public:
 		LexerFactory(void) {
 			this->rules.clear();
