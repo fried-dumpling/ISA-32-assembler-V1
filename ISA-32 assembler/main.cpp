@@ -414,7 +414,7 @@ namespace assembler {
 
 			expression,
 			number,
-		NTEND();
+			NTEND();
 
 		using ParserFactoy = parser_generator::ParserFactory<TokenType, NonterminalType>;
 		using PFCD = ParserFactoy::CreateData;
@@ -422,9 +422,12 @@ namespace assembler {
 		using NT = NonterminalType;
 		using TT = TokenType;
 
-		GRAMMERSTART(const PFCD, CreateData, NonterminalType, NonterminalType::program)
+		const PFCD CreateData = {
+			{ NT::__accept, { NT::program, TT::__eot } },
+
+			/*
 			{ TT::__epsilon, { TT::whitespace } },
-			{ TT::__epsilon, { TT::newline } },
+			{ TT::__epsilon, { TT::newline } },*/
 
 			{ NT::program, { NT::section } },
 
@@ -502,8 +505,7 @@ namespace assembler {
 			{ NT::number, { TT::decnum } },
 			{ NT::number, { TT::octnum } },
 			{ NT::number, { TT::binnum } },
-
-		GRAMMEREND();
+		};
 
 		ParserFactoy parserFactory;
 		Parser parser;

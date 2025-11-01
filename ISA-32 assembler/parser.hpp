@@ -20,9 +20,6 @@
 #define NTSTART(name) enum class name { __accept, 
 #define NTEND() __end }
 
-#define GRAMMERSTART(type, name, nonTerminal, start) type name { { nonTerminal::__accept, { start } }, 
-#define GRAMMEREND() }
-
 namespace parser_generator {
 	namespace convert {
 		using u64 = unsigned __int64;
@@ -63,9 +60,9 @@ namespace parser_generator {
 				QData cur = itemQ.front(); itemQ.pop();
 
 				Element mark = grammerVec[cur.item.prodId].second[cur.item.dotPos];
+				Element lhs = grammerVec[cur.item.prodId].first;
 				if (visited.find(mark) != visited.end())
 					continue;
-
 				visited.insert(mark);
 
 				auto range = grammerMap.equal_range(mark);
@@ -140,20 +137,19 @@ namespace parser_generator {
 			} QData;
 
 			ID closureId = 0;
-			std::set<std::vector<Item>, SetLessRule> visited;
+			std::map<std::vector<Item>, ID, SetLessRule> visited;
 
 			std::queue<QData> setQ;
 			std::vector<Item> startClosure;
 			getClosure(reduceItem[closureId], startClosure, grammerVec, grammerMap, startItemVec);
-			setQ.push({ startClosure, closureId++ });
+			setQ.push({ startClosure, closureId });
+			closureVec.push_back(startClosure);
+			visited[startClosure] = closureId++;
 			
+			std::map<u64, u64> dupeCount;
+
 			while (!setQ.empty()) {
 				QData cur = setQ.front(); setQ.pop();
-
-				if (visited.find(cur.closure) != visited.end())
-					continue;
-				visited.insert(cur.closure);
-				closureVec.push_back(cur.closure);
 
 				std::unordered_map<Element, std::vector<Item>> gotoMap;
 				getGotoItem(gotoMap, grammerVec, cur.closure);
@@ -161,12 +157,26 @@ namespace parser_generator {
 					std::vector<Item> closure;
 					getClosure(reduceItem[closureId], closure, grammerVec, grammerMap, it->second);
 
+					if (visited.find(closure) != visited.end()) {
+						ID id = visited[closure];
+
+						dupeCount[id]++;
+
+						transitionMap.insert({ cur.id, { id, it->first} });
+						continue;
+					}
 					ID id = closureId++;
+					visited[closure] = id;
+					closureVec.push_back(closure);
 					transitionMap.insert({ cur.id, { id, it->first} });
 
 					setQ.push({ closure, id });
 				}
 			}
+
+			std::cout << "Duplicate States:" << std::endl;
+			for (auto it = dupeCount.begin(); it != dupeCount.end(); ++it)
+				std::cout << "  " << it->first << ": " << it->second << std::endl;
 		}
 
 		inline void getFirstTable(
@@ -224,7 +234,7 @@ namespace parser_generator {
 				u64 counter = 0;
 				for (auto si = q.begin(); si != q.end(); ++si) {
 					u64 itemId = counter++;
-					if (grammerVec[si->prodId].second[si->dotPos] != core.first)
+					if (grammerVec[si->prodId].second.size() <= si->dotPos || grammerVec[si->prodId].second[si->dotPos] != core.first)
 						continue;
 
 					std::vector<Element>& rhs = grammerVec[si->prodId].second;
@@ -232,8 +242,8 @@ namespace parser_generator {
 						Element follow = rhs[si->dotPos + 1];
 						std::vector<u64>& first = firstTable[follow];
 						if (first.size()) {
-							lookahead.resize(std::max(lookahead.size(), (rhs[follow] >> 6) + 1), 0);
-							lookahead[rhs[follow] >> 6] |= (u64)1 << (rhs[follow] & 0b111111);
+							lookahead.resize(std::max(lookahead.size(), (follow >> 6) + 1), 0);
+							lookahead[follow >> 6] |= (u64)1 << (follow & 0b111111);
 							if (first[0] & 0b1)
 								ref.push_back({ it->second, itemId });
 							continue;
@@ -337,9 +347,24 @@ namespace parser_generator {
 			Action** actionTable;
 			Goto** gotoTable;
 			size_t size;
+			size_t actionSize;
+			size_t gotoSize;
 		} ParserTable;
 
-		void createTable(ParserTable& table, std::vector<std::pair<Element, std::vector<Element>>>& grammerVec, Element terminalEnd, Element nonterminalEnd, Element acceptTerminal) {
+		void printTable(ParserTable&, int);
+
+		void createTable(ParserTable& table, std::vector<std::pair<Element, std::vector<Element>>>& grammerVec, Element terminalEnd, Element nonterminalEnd, Element acceptNonterminal) {
+			acceptNonterminal += terminalEnd;
+
+			std::cout << "grammerVec:" << std::endl;
+			for (auto it = grammerVec.begin(); it != grammerVec.end(); ++it) {
+				static size_t k = 0;
+				std::cout << "  " << k++ << ": " << it->first << " -> ";
+				for (auto si = it->second.begin(); si != it->second.end(); ++si)
+					std::cout << *si << ", ";
+				std::cout << std::endl;
+			}
+
 			std::vector<Item> startItemVec;
 			std::unordered_multimap<Element, Element> revFirstGrammmer;
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>> grammerMap;
@@ -347,10 +372,24 @@ namespace parser_generator {
 			for (auto it = grammerVec.begin(); it != grammerVec.end(); ++it) {
 				grammerMap.insert({ it->first, { it->second, count } });
 				if (it->second.size())
-					revFirstGrammmer.insert({ it->first, it->second[0] });
-				if (!it->first)
+					revFirstGrammmer.insert({ it->second[0], it->first });
+				if (it->first == acceptNonterminal)
 					startItemVec.push_back({ count, 0, (u64)-1 });
 				count++;
+			}
+
+			std::cout << "startItem:" << std::endl;
+			for (auto it = startItemVec.begin(); it != startItemVec.end(); ++it)
+				std::cout << "  prod: " << it->prodId << ", dot: " << it->dotPos << ", look: " << (int)it->lookaheadId << std::endl;
+			std::cout << "revFirst:" << std::endl;
+			for (auto it = revFirstGrammmer.begin(); it != revFirstGrammmer.end(); ++it)
+				std::cout << "  " << it->first << " <- " << it->second << std::endl;
+			std::cout << "grammerMap:" << std::endl;
+			for (auto it = grammerMap.begin(); it != grammerMap.end(); ++it) {
+				std::cout << "  " << it->first << " -> ";
+				for (auto si = it->second.first.begin(); si != it->second.first.end(); ++si)
+					std::cout << *si << ", ";
+				std::cout << "(id: " << it->second.second << ")" << std::endl;
 			}
 
 			std::unordered_map<ID, std::vector<ID>> reduceItem;
@@ -358,20 +397,87 @@ namespace parser_generator {
 			std::unordered_multimap<ID, std::pair<ID, Element>> transitionMap;
 			createC0(reduceItem, closureVec, transitionMap, grammerVec, grammerMap, startItemVec);
 
+			std::cout << "reduceItem:" << std::endl;
+			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
+				for (auto si = it->second.begin(); si != it->second.end(); ++si)
+					std::cout << "  " << it->first << ", " << *si << std::endl;
+			}
+			std::cout << "closureVec:" << std::endl;
+			for (size_t i = 0; i < closureVec.size(); i++) {
+				std::cout << "  state " << i << ":" << std::endl;
+
+				for (size_t j = 0; j < closureVec[i].size(); j++) {
+					Item& item = closureVec[i][j];
+					std::cout << "    prod: " << item.prodId << ", dot: " << item.dotPos << ", look: " << (int)item.lookaheadId << std::endl;
+				}
+			}
+			std::cout << "transitionMap:" << std::endl;
+			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it)
+				std::cout << "  from: " << it->first << ", to: " << it->second.first << ", via: " << it->second.second << std::endl;
+
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>> revTransitionMap;
 			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it)
 				revTransitionMap[it->second.second].insert({ it->second.first, it->first });
 
+			std::cout << "revTransitionMap:" << std::endl;
+			for (auto it = revTransitionMap.begin(); it != revTransitionMap.end(); ++it) {
+				std::cout << "  via: " << it->first << std::endl;
+				for (auto si = it->second.begin(); si != it->second.end(); ++si)
+					std::cout << "    to: " << si->first << ", from: " << si->second << std::endl;
+			}
+
 			std::unordered_map<Element, std::vector<u64>> firstTable;
 			getFirstTable(firstTable, revFirstGrammmer, terminalEnd);
 
+			std::cout << "firstTable:" << std::endl;
+			for (auto it = firstTable.begin(); it != firstTable.end(); ++it) {
+				std::cout << "  " << it->first << " : ";
+				for (u64 i = 0; i < it->second.size(); i++) {
+					u64 bit = it->second[i];
+					for (u64 j = 0; j < 64 && bit; j++) {
+						if (bit & 0b1)
+							std::cout << (i * 64 + j) << ", ";
+						bit >>= 1;
+					}
+				}
+				std::cout << std::endl;
+			}
+
 			std::vector<std::vector<u64>> lookaheadSets;
 			getLookahead(lookaheadSets, closureVec, reduceItem, revTransitionMap, grammerVec, grammerMap, firstTable);
+
+			std::cout << "closureVec:" << std::endl;
+			for (size_t i = 0; i < closureVec.size(); i++) {
+				std::cout << "  state " << i << ":" << std::endl;
+
+				for (size_t j = 0; j < closureVec[i].size(); j++) {
+					Item& item = closureVec[i][j];
+					std::cout << "    prod: " << item.prodId << ", dot: " << item.dotPos << ", look: " << (int)item.lookaheadId << std::endl;
+				}
+			}
+
+			std::cout << "lookaheadSets:" << std::endl;
+			for (auto it = lookaheadSets.begin(); it != lookaheadSets.end(); ++it) {
+				static size_t k = 0;
+				std::cout << "  set" << k++ << ": ";
+				for (u64 i = 0; i < it->size(); i++) {
+					u64 bit = (*it)[i];
+					for (u64 j = 0; j < 64 && bit; j++) {
+						if (bit & 0b1)
+							std::cout << (i * 64 + j) << ", ";
+						bit >>= 1;
+					}
+				}
+				std::cout << std::endl;
+			}
 
 			size_t stateSize = closureVec.size(), actionSize = terminalEnd, gotoSize = nonterminalEnd;
 			table.actionTable = new Action*[stateSize];
 			table.gotoTable = new Goto*[stateSize];
 			table.size = stateSize;
+			table.actionSize = actionSize;
+			table.gotoSize = gotoSize;
+
 			for (size_t i = 0; i < stateSize; i++) {
 				table.actionTable[i] = new Action[actionSize];
 				for (size_t j = 0; j < actionSize; j++)
@@ -393,7 +499,7 @@ namespace parser_generator {
 				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
 					Item& item = closureVec[it->first][*si];
 					ActionType type = ActionType::Reduce;
-					if (grammerVec[item.prodId].first == acceptTerminal)
+					if (grammerVec[item.prodId].first == acceptNonterminal)
 						type = ActionType::Accept;
 
 					std::vector<u64> lookahead = lookaheadSets[item.lookaheadId];
@@ -406,6 +512,74 @@ namespace parser_generator {
 						}
 					}
 				}
+			}
+
+			printTable(table, 3);
+		}
+
+		std::string int2str(int num, int len) {
+			std::string out;
+			std::vector<char> buff;
+			for (int i = 0; i < len; i++) {
+				buff.push_back((num % 10) + '0');
+				num /= 10;
+			}
+			for (auto it = buff.rbegin(); it != buff.rend(); ++it)
+				out.push_back(*it);
+
+			return out;
+		}
+
+		std::string space(int len) {
+			std::string out;
+			for (int i = 0; i < len; i++)
+				out.push_back(' ');
+			return out;
+		}
+
+		void printTable(ParserTable& table, int len) {
+			std::cout << space(len + 4);
+			for (size_t i = 0; i < table.actionSize; i++) {
+				std::cout << "A" << int2str(i, len) << " ";
+			}
+			std::cout << "| ";
+			for (size_t i = 0; i < table.gotoSize; i++) {
+				std::cout << "G" << int2str(i, len) << " ";
+			}
+			std::cout << std::endl;
+
+			for (size_t i = 0; i < table.size; i++) {
+				std::cout << "ST" << int2str(i, len) << ": ";
+
+				for (size_t j = 0; j < table.actionSize; j++) {
+					Action& action = table.actionTable[i][j];
+					switch (action.type) {
+					case ActionType::Shift:
+						std::cout << "S" << int2str(action.args, len) << " ";
+						break;
+					case ActionType::Reduce:
+						std::cout << "R" << int2str(action.args, len) << " ";
+						break;
+					case ActionType::Accept:
+						std::cout << "A" << int2str(action.args, len) << " ";
+						break;
+					case ActionType::Error:
+						std::cout << "E" << int2str(action.args, len) << " ";
+						break;
+					}
+				}
+
+				std::cout << "| ";
+
+				for (size_t j = 0; j < table.gotoSize; j++) {
+					Goto& go = table.gotoTable[i][j];
+					if (go.error)
+						std::cout << "E" << int2str(go.state, len) << " ";
+					else
+						std::cout << "G" << int2str(go.state, len) << " ";
+				}
+
+				std::cout << std::endl;
 			}
 		}
 	}
