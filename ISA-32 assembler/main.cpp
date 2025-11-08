@@ -414,7 +414,30 @@ namespace assembler {
 
 			expression,
 			number,
-			NTEND();
+		NTEND();
+
+		std::unordered_map<NonterminalType, std::string> nonterminalStr{
+			{ NonterminalType::__accept, "accept" },
+
+			{ NonterminalType::program, "program" },
+			{ NonterminalType::section, "section" },
+			{ NonterminalType::text_section, "text_section" },
+			{ NonterminalType::data_section, "data_section" },
+			{ NonterminalType::bss_section, "bss_section" },
+
+
+			{ NonterminalType::intruction, "intruction" },
+			{ NonterminalType::reg, "reg" },
+			{ NonterminalType::regid, "regid" },
+			{ NonterminalType::regmode, "regmode" },
+			{ NonterminalType::reg_gen, "reg_gen" },
+			{ NonterminalType::reg_reg, "reg_reg" },
+
+			{ NonterminalType::label, "label" },
+
+			{ NonterminalType::expression, "expression" },
+			{ NonterminalType::number, "number" }
+		};
 
 		using ParserFactoy = parser_generator::ParserFactory<TokenType, NonterminalType>;
 		using PFCD = ParserFactoy::CreateData;
@@ -423,22 +446,23 @@ namespace assembler {
 		using TT = TokenType;
 
 		const PFCD CreateData = {
-			{ NT::__accept, { NT::program, TT::__eot } },
-
-			/*
-			{ TT::__epsilon, { TT::whitespace } },
-			{ TT::__epsilon, { TT::newline } },*/
+			{ NT::__accept, { NT::program } },
 
 			{ NT::program, { NT::section } },
 
 			{ NT::section, { TT::text, NT::text_section, NT::section } },
 			{ NT::section, { TT::data, NT::data_section, NT::section } },
 			{ NT::section, { TT::bss, NT::bss_section, NT::section } },
-			{ NT::section, { TT::__epsilon } },
 
-			{ NT::text_section, { NT::intruction, NT::text_section} },
+			{ NT::section, { TT::text, NT::text_section } },
+			{ NT::section, { TT::data, NT::data_section } },
+			{ NT::section, { TT::bss, NT::bss_section } },
+
+			{ NT::text_section, { NT::intruction, NT::text_section } },
 			{ NT::text_section, { NT::label, NT::text_section} },
-			{ NT::text_section, { TT::__epsilon } },
+
+			{ NT::text_section, { NT::intruction } },
+			{ NT::text_section, { NT::label } },
 
 			{ NT::intruction, { TT::add, NT::reg, NT::reg} },
 			{ NT::intruction, { TT::addc, NT::reg, NT::reg} },
@@ -625,12 +649,19 @@ int main(int argc, char* argv[]) {
 		cout << tmp << "; " << ((it->type == TokenType::__unknown) ? "error" : lexer::tokenStr[it->type]) << endl;
 	}
 	cout << "------------------------------------------------------------" << endl;
-
-
+	
 	std::vector<TokenType> ttv;
 	ttv.reserve(tokens.size());
-	for (auto it = tokens.begin(); it != tokens.end(); ++it)
+	for (auto it = tokens.begin(); it != tokens.end(); ++it) {
+		if (it->type == TokenType::whitespace || it->type == TokenType::newline || it->type == TokenType::comment)
+			continue;
 		ttv.push_back(it->type);
+	}
+
+	std::cout << "parse token:" << std::endl;
+	for (auto it = ttv.begin(); it != ttv.end(); ++it)
+		std::cout << lexer::tokenStr[*it] << " : " << (int)*it << std::endl;
+	std::cout << "------------------------------------------------------------" << endl;
 
 	std::vector<unsigned long long> parseVec;
 	bool validParse = parser::parser.parse(parseVec, ttv);
@@ -639,7 +670,12 @@ int main(int argc, char* argv[]) {
 	cout << (validParse ? "success" : "failed") << endl;
 	cout << "------------------------------------------------------------" << endl;
 	for (auto it = parseVec.begin(); it != parseVec.end(); it++) {
-		cout << (int)(*it) << endl;
+		cout << (int)(*it) << ": ";
+		auto tmp = parser::CreateData[*it];
+		cout << ((tmp.first.getRaw().first) ? lexer::tokenStr[(TokenType)tmp.first.getRaw().second] : parser::nonterminalStr[(NonterminalType)tmp.first.getRaw().second]) << " -> ";
+		for (auto si = tmp.second.begin(); si != tmp.second.end(); si++)
+			cout << ((si->getRaw().first) ? lexer::tokenStr[(TokenType)si->getRaw().second] : parser::nonterminalStr[(NonterminalType)si->getRaw().second]) << ", ";
+		cout << endl;
 	}
 	cout << "------------------------------------------------------------" << endl;
 
