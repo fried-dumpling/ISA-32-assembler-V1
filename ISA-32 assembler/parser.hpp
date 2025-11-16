@@ -136,11 +136,12 @@ namespace parser_generator {
 
 		inline void createC0(
 			std::unordered_map<ID, std::unordered_set<ID>>& reduceItem,
+			std::vector<std::pair<ID, ID>>& startItemIds,
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_multimap<ID, std::pair<ID, Element>>& transitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
-			std::vector<Item> startItemVec) {
+			Item startItem) {
 
 			typedef struct _QData {
 				std::vector<Item> closure;
@@ -152,10 +153,18 @@ namespace parser_generator {
 
 			std::queue<QData> setQ;
 			std::vector<Item> startClosure;
-			getClosure(reduceItem[closureId], startClosure, grammerVec, grammerMap, startItemVec);
+			getClosure(reduceItem[closureId], startClosure, grammerVec, grammerMap, { startItem });
 			setQ.push({ startClosure, closureId });
 			closureVec.push_back(startClosure);
 			visited[startClosure] = closureId++;
+
+			/*
+			for (auto it = startClosure.begin(); it != startClosure.end(); ++it) {
+				static size_t itemIndex = 0;
+				if (it->prodId == startItem.prodId)
+					startItemIds.push_back({ 0, itemIndex });
+				itemIndex++;
+			}*/
 
 			while (!setQ.empty()) {
 				QData cur = setQ.front(); setQ.pop();
@@ -180,6 +189,17 @@ namespace parser_generator {
 
 					setQ.push({ closure, id });
 				}
+			}
+
+			size_t closureIndex = 0;
+			for (auto it = closureVec.begin(); it != closureVec.end(); ++it) {
+				size_t itemIndex = 0;
+				for (auto si = it->begin(); si != it->end(); ++si) {
+					if (si->prodId == startItem.prodId)
+						startItemIds.push_back({ closureIndex, itemIndex });
+					itemIndex++;
+				}
+				closureIndex++;
 			}
 		}
 
@@ -212,15 +232,6 @@ namespace parser_generator {
 			while (!elementStack.empty()) {
 				SData cur = elementStack.top();
 
-				if (cur.cur >= terminalEnd && calculating.find(cur.cur) == calculating.end()) {
-					elementStack.pop();
-					if (firstCache[cur.cur].size() && !(firstCache[cur.cur][0] & 0b1)) {
-						while (!elementStack.empty() && elementStack.top().index == cur.index)
-							elementStack.pop();
-					}
-					continue;
-				}
-
 				if (cur.cur < terminalEnd && firstCache.find(cur.cur) == firstCache.end()) {
 					firstCache[cur.cur].resize(std::max(firstCache[cur.cur].size(), (cur.cur >> 6) + 1), 0);
 					firstCache[cur.cur][cur.cur >> 6] |= (u64)1 << (cur.cur & 0b111111);
@@ -228,12 +239,12 @@ namespace parser_generator {
 
 				if (firstCache.find(cur.cur) != firstCache.end()) {
 					firstCache[cur.prev].resize(std::max(firstCache[cur.prev].size(), firstCache[cur.cur].size()), 0);
+					firstCache[cur.prev][0] &= ~((u64)0b1);
 					for (size_t i = 0; i < firstCache[cur.cur].size(); i++)
 						firstCache[cur.prev][i] |= firstCache[cur.cur][i];
-					firstCache[cur.prev][0] &= ~((u64)0b1);
 
 					elementStack.pop();
-					if (firstCache[cur.cur].size() && !(firstCache[cur.cur][0] & 0b1)) {
+					if (!(firstCache[cur.cur].size() && (firstCache[cur.cur][0] & 0b1))) {
 						while (!elementStack.empty() && elementStack.top().index == cur.index)
 							elementStack.pop();
 					}
@@ -244,10 +255,18 @@ namespace parser_generator {
 				size_t nextIndex = cur.index + 1;
 				auto range = grammerMap.equal_range(cur.cur);
 				for (auto it = range.first; it != range.second; ++it) {
+					std::set<Element> tmpCalculating;
 					for (auto si = it->second.first.rbegin(); si != it->second.first.rend(); ++si) {
 						elementStack.push({ *si, cur.cur, nextIndex });
-						calculating.insert(*si);
+						if (*si >= terminalEnd && calculating.find(*si) != calculating.end()) {
+							elementStack.pop();
+							while (!elementStack.empty() && elementStack.top().index == nextIndex)
+								elementStack.pop();
+							continue;
+						}
+						tmpCalculating.insert(*si);
 					}
+					calculating.insert(tmpCalculating.begin(), tmpCalculating.end());
 
 					nextIndex++;
 				}
@@ -262,18 +281,15 @@ namespace parser_generator {
 
 		inline void lookaheadHelper(
 			std::vector<u64>& lookahead,
-			std::vector<std::pair<u64, u64>> ref,
+			std::vector<std::pair<u64, u64>>& ref,
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
 			std::unordered_map<Element, std::vector<u64>>& firstCache,
-			Element terminalEnd,
-			ID closureID, Item item) {
+			Element terminalEnd, ID closureID, Item item) {
 
 			std::pair<Element, std::vector<Element>>& core = grammerVec[item.prodId];
-			if (item.dotPos <= 0)
-				return;
 			std::vector<Element> prev;
 			for (size_t i = 0; i < item.dotPos; i++)
 				prev.push_back(core.second[i]);
@@ -284,15 +300,11 @@ namespace parser_generator {
 			} QData;
 
 			std::unordered_set<ID> predSet;
-			std::unordered_set<ID> visited;
 			std::queue<QData> closureQ;
-			closureQ.push({ closureID, prev.size() - 1});
+
+			closureQ.push({ closureID, (u64)(item.dotPos - 1)});
 			while (!closureQ.empty()) {
 				QData cur = closureQ.front(); closureQ.pop();
-
-				if (visited.find(cur.closureId) != visited.end())
-					continue;
-				visited.insert(cur.closureId);
 
 				if (cur.index == (u64)-1) {
 					predSet.insert(cur.closureId);
@@ -304,57 +316,159 @@ namespace parser_generator {
 					closureQ.push({ it->second, cur.index - 1 });
 			}
 
-
 			for (auto it = predSet.begin(); it != predSet.end(); ++it) {
-				std::vector<Item>& q = closureVec[*it];
+				std::vector<Item>& curClosure = closureVec[*it];
 				u64 counter = 0;
-				for (auto si = q.begin(); si != q.end(); ++si) {
+				for (auto si = curClosure.begin(); si != curClosure.end(); ++si) {
 					u64 itemId = counter++;
 					if (grammerVec[si->prodId].second.size() <= si->dotPos || grammerVec[si->prodId].second[si->dotPos] != core.first)
 						continue;
 
 					std::vector<Element>& rhs = grammerVec[si->prodId].second;
-					if (rhs.size() > si->dotPos) {
-						Element follow = terminalEnd - 1;
-						if (rhs.size() > si->dotPos + 1)
-							follow = rhs[si->dotPos + 1];
-						std::vector<u64>& first = getFirst(follow, grammerMap, firstCache, terminalEnd);
-						if (first.size()) {
-							lookahead.resize(std::max(lookahead.size(), first.size()), 0);
-							for (size_t i = 0; i < first.size(); i++)
-								lookahead[i] |= first[i];
 
-							if (first[0] & 0b1)
-								ref.push_back({ *it, itemId });
-							continue;
-						}
-					}
-					if (!lookahead.size())
-						lookahead.resize(1, 0);
-					lookahead[0] |= 1;
-					ref.push_back({ *it, itemId });
+					std::vector<Element> follow;
+					for (size_t i = si->dotPos + 1; i < rhs.size(); i++)
+						follow.push_back(rhs[i]);
+
+					bool continueFlag = true;
+					size_t index = 0;
+					do {
+						if (index >= follow.size())
+							break;
+
+						std::vector<u64>& first = getFirst(follow[index], grammerMap, firstCache, terminalEnd);
+						lookahead.resize(std::max(lookahead.size(), first.size()), 0);
+						for (size_t i = 0; i < first.size(); i++)
+							lookahead[i] |= first[i];
+						lookahead[0] &= ~((u64)0b1);
+
+						continueFlag = first[0] & 0b1; index++;
+					} while (continueFlag);
+
+					if (continueFlag)
+						ref.push_back({ *it, itemId });
 				}
 			}
+		}
+
+		typedef struct _DoubleID {
+			ID closureId;
+			ID itemId;
+
+			operator std::pair<ID, ID>() const {
+				return { closureId, itemId };
+			}
+
+			bool operator == (const _DoubleID& other) const {
+				return (this->closureId == other.closureId && this->itemId == other.itemId);
+			}
+		} DoubleID;
+
+		typedef struct _HashDoubleID {
+			size_t operator()(const DoubleID& k) const {
+				return std::hash<ID>()((k.closureId << 1) ^ (k.itemId));
+			}
+		} HashDoubleID;
+
+		typedef struct _EqualDoubleID {
+			bool operator()(const DoubleID& left, const DoubleID& right) const {
+				return left.closureId == right.closureId && left.itemId == right.itemId;
+			}
+		} EqualDoubleID;
+
+		typedef struct _TarjanDFAdata {
+			std::unordered_map<DoubleID, ID, HashDoubleID, EqualDoubleID>* index;
+			std::unordered_map<DoubleID, ID, HashDoubleID, EqualDoubleID>* low;
+			std::unordered_map<DoubleID, bool, HashDoubleID, EqualDoubleID>* onStack;
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>* transitionMap;
+			int indexCt;
+		} TarjanDFAdata;
+
+		inline void tarjanDFA(TarjanDFAdata* data, DoubleID id) {
+
+			(*data->index)[id] = data->indexCt++;
+			(*data->low)[id] = (*data->index)[id];
+			(*data->onStack)[id] = true;
+
+			auto range = data->transitionMap->equal_range(id);
+			for (auto it = range.first; it != range.second; ++it) {
+				if ((*data->onStack)[it->second]) {
+					(*data->low)[id] = std::min((*data->low)[id], (*data->index)[it->second]);
+					continue;
+				}
+
+				if ((*data->index)[it->second])
+					continue;
+
+				tarjanDFA(data, it->second);
+				(*data->low)[id] = std::min((*data->low)[id], (*data->low)[it->second]);
+			}
+		}
+
+		inline void tarjan(
+			std::unordered_map<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>& sccMap,
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>& transitionMap) {
+
+			std::unordered_map<DoubleID, ID, HashDoubleID, EqualDoubleID> index, low;
+			std::unordered_map<DoubleID, bool, HashDoubleID, EqualDoubleID> onStack;
+
+			TarjanDFAdata data = {};
+			data.index = &index;
+			data.low = &low;
+			data.onStack = &onStack;
+			data.transitionMap = &transitionMap;
+			data.indexCt = 1;
+
+			std::unordered_set<DoubleID, HashDoubleID, EqualDoubleID> idSet;
+			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
+				idSet.insert(it->first);
+				idSet.insert(it->second);
+			}
+
+			for (auto it = idSet.begin(); it != idSet.end(); ++it) {
+				if (index[*it])
+					continue;
+
+				tarjanDFA(&data, *it);
+				for (auto si = onStack.begin(); si != onStack.end(); ++si)
+					si->second = false;
+			}
+
+			std::unordered_map<ID, DoubleID> rIndex;
+			for (auto it = index.begin(); it != index.end(); ++it)
+				rIndex[it->second] = it->first;
+
+			for (auto it = idSet.begin(); it != idSet.end(); ++it) {
+				sccMap[*it] = rIndex[low[*it]];
+			}
+		}
+
+		inline DoubleID replaceScc(DoubleID id, std::unordered_map<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>& sccMap) {
+			auto it = sccMap.find(id);
+			if (it == sccMap.end())
+				return id;
+			return it->second;
 		}
 
 		inline void getLookahead(
 			std::vector<std::vector<u64>>& lookaheadSets,
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_map<ID, std::unordered_set<ID>>& reduceItem,
+			std::vector<std::pair<ID, ID>>& startItems,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
-			Element terminalEnd) {
+			Element terminalEnd, Element eot) {
 
 			typedef struct _TableData {
-				std::vector<std::pair<u64, u64>> ref;
+				std::vector<std::pair<ID, ID>> ref;
 				std::vector<u64> lookaheadSet;
 			} TableData;
 
 			std::unordered_map<Element, std::vector<u64>> firstCache;
 			std::unordered_map<ID, std::unordered_map<ID, TableData>> lookaheadTable;
-			std::unordered_map<ID, std::unordered_map<ID, bool>> visited;
-			std::unordered_map<ID, std::unordered_map<ID, u64>> orderMap;
+			std::unordered_map<ID, std::unordered_set<ID>> visited;
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID> rRefMap;
 
 			typedef struct _QData {
 				ID closureId, itemId;
@@ -370,38 +484,94 @@ namespace parser_generator {
 			u64 count = 0;
 			while (!itemQ.empty()) {
 				QData cur = itemQ.front(); itemQ.pop();
-				orderMap[cur.closureId][cur.itemId] = count++;
-
-				if (visited[cur.closureId][cur.itemId])
+				if (!visited[cur.closureId].insert(cur.itemId).second)
 					continue;
-				visited[cur.closureId][cur.itemId] = true;
 				
 				std::vector<Item>& closure = closureVec[cur.closureId];
 				lookaheadHelper(lookaheadTable[cur.closureId][cur.itemId].lookaheadSet, lookaheadTable[cur.closureId][cur.itemId].ref, closureVec, revTransitionMap, grammerVec, grammerMap, firstCache, terminalEnd, cur.closureId, closure[cur.itemId]);
 
-				std::vector<std::pair<u64, u64>>& ref = lookaheadTable[cur.closureId][cur.itemId].ref;
-				for (auto it = ref.begin(); it != ref.end(); ++it)
+				std::vector<std::pair<ID, ID>>& ref = lookaheadTable[cur.closureId][cur.itemId].ref;
+				for (auto it = ref.begin(); it != ref.end(); ++it) {
 					itemQ.push({ it->first, it->second });
-			}
-
-			std::map<ID, QData, std::greater<ID>> orderedMap;
-
-			for (auto it = orderMap.begin(); it != orderMap.end(); ++it) {
-				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
-					orderedMap[si->second] = { it->first, si->first };
+					rRefMap.insert({ { it->first, it->second }, { cur.closureId, cur.itemId } });
 				}
 			}
 
-			for (auto it = orderedMap.begin(); it != orderedMap.end(); ++it) {
-				std::vector<u64>& curSet = lookaheadTable[it->second.closureId][it->second.itemId].lookaheadSet;
+			for (auto it = startItems.begin(); it != startItems.end(); ++it) {
+				lookaheadTable[it->first][it->second].ref.clear();
+				std::vector<u64>& startLook = lookaheadTable[it->first][it->second].lookaheadSet;
+				startLook.resize((eot >> 6) + 1, 0);
+				startLook[eot >> 6] |= (u64)1 << (eot & 0b111111);
+			}
 
-				std::vector<std::pair<ID, ID>>& ref = lookaheadTable[it->second.closureId][it->second.itemId].ref;
-				for (auto si = ref.begin(); si != ref.end(); ++it) {
-					std::vector<u64>& lookaheadSet = lookaheadTable[si->first][si->second].lookaheadSet;
-					lookaheadSet.resize(std::max(lookaheadSet.size(), curSet.size()), 0);
-					for (u64 i = 0; i < curSet.size(); i++)
-						lookaheadSet[i] |= curSet[i];
+			std::unordered_map<DoubleID, DoubleID, HashDoubleID, EqualDoubleID> sccMap;
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID> sccRRefMap;
+			std::set<std::pair<std::pair<ID, ID>, std::pair<ID, ID>>> sccRRefSet;
+			tarjan(sccMap, rRefMap);
+
+			for (auto it = rRefMap.begin(); it != rRefMap.end(); ++it) {
+				DoubleID first = replaceScc(it->first, sccMap), second = replaceScc(it->second, sccMap);
+				if (sccRRefSet.insert({ first, second }).second && !(first == second))
+					sccRRefMap.insert({ first, second });
+				else
+					std::cout << "copy" << std::endl;
+			}
+
+			std::unordered_map<DoubleID, std::unordered_set<DoubleID, HashDoubleID, EqualDoubleID>, HashDoubleID, EqualDoubleID> sccRefTable;
+
+			for (auto it = sccMap.begin(); it != sccMap.end(); ++it) {
+				TableData& cur = lookaheadTable[it->first.closureId][it->first.itemId];
+				TableData& scc = lookaheadTable[it->second.closureId][it->second.itemId];
+				scc.lookaheadSet.resize(std::max(scc.lookaheadSet.size(), cur.lookaheadSet.size()), 0);
+				for (size_t i = 0; i < cur.lookaheadSet.size(); i++)
+					scc.lookaheadSet[i] |= cur.lookaheadSet[i];
+
+				for (auto si = cur.ref.begin(); si != cur.ref.end(); si++)
+					sccRefTable[it->second].insert({ si->first, si->second });
+			}
+
+			std::vector<DoubleID> orderedSet;
+			std::unordered_map<DoubleID, u64, HashDoubleID, EqualDoubleID> inDegree;
+			std::queue<DoubleID> sortQ;
+
+			for (auto it = sccRRefMap.begin(); it != sccRRefMap.end(); ++it) {
+				inDegree[it->first];
+				inDegree[it->second]++;
+			}
+
+			for (auto it = inDegree.begin(); it != inDegree.end(); ++it) {
+				if (!it->second)
+					sortQ.push(it->first);
+			}
+
+			while (!sortQ.empty()) {
+				DoubleID cur = sortQ.front(); sortQ.pop();
+				orderedSet.push_back(cur);
+
+				auto range = sccRRefMap.equal_range(cur);
+				for (auto it = range.first; it != range.second; ++it) {
+					if (!--inDegree[it->second])
+						sortQ.push(it->second);
 				}
+			}
+
+			for (auto it = orderedSet.begin(); it != orderedSet.end(); ++it) {
+				std::vector<u64>& curSet = lookaheadTable[it->closureId][it->itemId].lookaheadSet;
+
+				auto& ref = sccRefTable[*it];
+				for (auto si = ref.begin(); si != ref.end(); ++si) {
+					std::vector<u64>& lookaheadSet = lookaheadTable[si->closureId][si->itemId].lookaheadSet;
+					curSet.resize(std::max(curSet.size(), lookaheadSet.size()), 0);
+					for (u64 i = 0; i < lookaheadSet.size(); i++)
+						curSet[i] |= lookaheadSet[i];
+				}
+			}
+			
+			for (auto it = sccMap.begin(); it != sccMap.end(); ++it) {
+				TableData& cur = lookaheadTable[it->first.closureId][it->first.itemId];
+				TableData& scc = lookaheadTable[it->second.closureId][it->second.itemId];
+
+				cur.lookaheadSet = scc.lookaheadSet;
 			}
 
 			count = 0;
@@ -452,19 +622,18 @@ namespace parser_generator {
 				std::cout << std::endl;
 			}
 
-			std::vector<Item> startItemVec;
+			Item startItem;
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>> grammerMap;
 			u64 count = 0;
 			for (auto it = grammerVec.begin(); it != grammerVec.end(); ++it) {
 				grammerMap.insert({ it->first, { it->second, count } });
 				if (it->first == acceptNonterminal)
-					startItemVec.push_back({ count, 0, (u64)-1 });
+					startItem = { count, 0, (u64)-1 };
 				count++;
 			}
 
 			std::cout << "startItem:" << std::endl;
-			for (auto it = startItemVec.begin(); it != startItemVec.end(); ++it)
-				std::cout << "  prod: " << it->prodId << ", dot: " << it->dotPos << ", look: " << (int)it->lookaheadId << std::endl;
+			std::cout << "  prod: " << startItem.prodId << ", dot: " << startItem.dotPos << ", look: " << (int)startItem.lookaheadId << std::endl;
 			std::cout << "grammerMap:" << std::endl;
 			for (auto it = grammerMap.begin(); it != grammerMap.end(); ++it) {
 				std::cout << "  " << it->first << " -> ";
@@ -474,9 +643,10 @@ namespace parser_generator {
 			}
 
 			std::unordered_map<ID, std::unordered_set<ID>> reduceItem;
+			std::vector<std::pair<ID, ID>> startItemIds;
 			std::vector<std::vector<Item>> closureVec;
 			std::unordered_multimap<ID, std::pair<ID, Element>> transitionMap;
-			createC0(reduceItem, closureVec, transitionMap, grammerVec, grammerMap, startItemVec);
+			createC0(reduceItem, startItemIds, closureVec, transitionMap, grammerVec, grammerMap, startItem);
 
 			std::cout << "reduceItem:" << std::endl;
 			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
@@ -509,7 +679,7 @@ namespace parser_generator {
 			}
 
 			std::vector<std::vector<u64>> lookaheadSets;
-			getLookahead(lookaheadSets, closureVec, reduceItem, revTransitionMap, grammerVec, grammerMap, terminalEnd);
+			getLookahead(lookaheadSets, closureVec, reduceItem, startItemIds, revTransitionMap, grammerVec, grammerMap, terminalEnd, terminalEnd - 1);
 
 			std::cout << "closureVec:" << std::endl;
 			for (size_t i = 0; i < closureVec.size(); i++) {
@@ -562,19 +732,25 @@ namespace parser_generator {
 			for (size_t i = 0; i < stateSize; i++) {
 				table.actionTable[i] = new Action[actionSize];
 				for (size_t j = 0; j < actionSize; j++)
-					table.actionTable[i][j] = { 0, ActionType::Error};
+					table.actionTable[i][j] = { 0, ActionType::Error };
 
 				table.gotoTable[i] = new Goto[gotoSize];
 				for (size_t j = 0; j < gotoSize; j++)
 					table.gotoTable[i][j] = { 0, true };
 			}
 
+			std::map<std::pair<ID, ID>, int> handledReduce;
+
 			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
-				if (it->second.second < terminalEnd)
+				if (it->second.second < terminalEnd) {
 					table.actionTable[it->first][it->second.second] = { it->second.first, ActionType::Shift };
+					handledReduce.insert({ { it->first, it->second.second },  -(int)it->second.second});
+				}
 				else
 					table.gotoTable[it->first][it->second.second - terminalEnd] = { it->second.first, false };
 			}
+
+			std::cout << "SRR conflict:" << std::endl;
 
 			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
 				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
@@ -589,10 +765,14 @@ namespace parser_generator {
 						for (u64 j = 0; j < 64 && bit; j++) {
 							if (bit & 0b1) {
 								if (it->first >= table.size)
-									std::cout << "error" << std::endl;
+									std::cout << "tableSize error" << std::endl;
 								if (i * 64 + j >= table.actionSize)
-									std::cout << "error" << std::endl;
+									std::cout << "actionSize error" << std::endl;
 								table.actionTable[it->first][i * 64 + j] = { item.prodId, type };
+
+
+								if (!handledReduce.insert({ { it->first, i * 64 + j }, (int)item.prodId }).second)
+									std::cout << "  state" << it->first << ", " << (i * 64 + j) << ", item " << item.prodId << ", prev" << handledReduce[{it->first, i * 64 + j}] << std::endl;
 							}
 							bit >>= 1;
 						}
