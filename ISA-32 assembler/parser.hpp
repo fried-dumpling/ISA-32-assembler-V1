@@ -222,7 +222,6 @@ namespace parser_generator {
 
 			std::stack<SData> elementStack;
 			elementStack.push({ element, 0 });
-			calculating.insert(element);
 
 			while (!elementStack.empty()) {
 				SData cur = elementStack.top();
@@ -233,6 +232,8 @@ namespace parser_generator {
 				}
 
 				if (firstCache.find(cur.cur) != firstCache.end()) {
+					calculating.erase(cur.cur);
+
 					firstCache[cur.prev].resize(std::max(firstCache[cur.prev].size(), firstCache[cur.cur].size()), 0);
 					firstCache[cur.prev][0] &= ~((u64)0b1);
 					for (size_t i = 0; i < firstCache[cur.cur].size(); i++)
@@ -247,22 +248,22 @@ namespace parser_generator {
 					continue;
 				}
 
+				if (calculating.find(cur.cur) != calculating.end()) {
+					firstCache[cur.prev].resize(std::max(firstCache[cur.prev].size(), (size_t)1), 0);
+					if (!(firstCache[cur.cur][0] & 0b1)) {
+						while (!elementStack.empty() && elementStack.top().index == cur.index)
+							elementStack.pop();
+					}
+					continue;
+				}
+
+				calculating.insert(cur.cur);
+
 				size_t nextIndex = cur.index + 1;
 				auto range = grammerMap.equal_range(cur.cur);
 				for (auto it = range.first; it != range.second; ++it) {
-					std::set<Element> tmpCalculating;
-					for (auto si = it->second.first.rbegin(); si != it->second.first.rend(); ++si) {
+					for (auto si = it->second.first.rbegin(); si != it->second.first.rend(); ++si)
 						elementStack.push({ *si, cur.cur, nextIndex });
-						if (*si >= terminalEnd && calculating.find(*si) != calculating.end()) {
-							elementStack.pop();
-							while (!elementStack.empty() && elementStack.top().index == nextIndex)
-								elementStack.pop();
-							continue;
-						}
-						tmpCalculating.insert(*si);
-					}
-					calculating.insert(tmpCalculating.begin(), tmpCalculating.end());
-
 					nextIndex++;
 				}
 
@@ -361,60 +362,51 @@ namespace parser_generator {
 
 		typedef struct _HashDoubleID {
 			size_t operator()(const DoubleID& k) const {
-				return std::hash<ID>()((k.closureId << 1) ^ (k.itemId));
+				size_t h1 = std::hash<ID>()(k.closureId);
+				size_t h2 = std::hash<ID>()(k.itemId);
+				return h1 ^ (h2 << 32) ^ (h2 >> 32);
 			}
 		} HashDoubleID;
 
-		typedef struct _EqualDoubleID {
-			bool operator()(const DoubleID& left, const DoubleID& right) const {
-				return left.closureId == right.closureId && left.itemId == right.itemId;
-			}
-		} EqualDoubleID;
+		typedef struct _TarjanDFSdata {
+			std::unordered_map<DoubleID, u64, HashDoubleID>& index;
+			std::unordered_map<DoubleID, u64, HashDoubleID>& low;
+			std::unordered_map<DoubleID, bool, HashDoubleID>& onStack;
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID>& transitionMap;
+			u64 indexCt;
+		} TarjanDFSdata;
 
-		typedef struct _TarjanDFAdata {
-			std::unordered_map<DoubleID, ID, HashDoubleID, EqualDoubleID>* index;
-			std::unordered_map<DoubleID, ID, HashDoubleID, EqualDoubleID>* low;
-			std::unordered_map<DoubleID, bool, HashDoubleID, EqualDoubleID>* onStack;
-			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>* transitionMap;
-			int indexCt;
-		} TarjanDFAdata;
+		inline void tarjanDFS(TarjanDFSdata& data, DoubleID id) {
+			data.index[id] = data.indexCt++;
+			data.low[id] = data.index[id];
+			data.onStack[id] = true;
 
-		inline void tarjanDFA(TarjanDFAdata* data, DoubleID id) {
+			auto range = data.transitionMap.equal_range(id);
 
-			(*data->index)[id] = data->indexCt++;
-			(*data->low)[id] = (*data->index)[id];
-			(*data->onStack)[id] = true;
-
-			auto range = data->transitionMap->equal_range(id);
 			for (auto it = range.first; it != range.second; ++it) {
-				if ((*data->onStack)[it->second]) {
-					(*data->low)[id] = std::min((*data->low)[id], (*data->index)[it->second]);
+				if (!data.index[it->second]) {
+					tarjanDFS(data, it->second);
+					data.low[id] = std::min(data.low[id], data.low[it->second]);
 					continue;
 				}
 
-				if ((*data->index)[it->second])
-					continue;
-
-				tarjanDFA(data, it->second);
-				(*data->low)[id] = std::min((*data->low)[id], (*data->low)[it->second]);
+				if (data.onStack[it->second])
+					data.low[id] = std::min(data.low[id], data.index[it->second]);
 			}
+
+			data.onStack[id] = false;
 		}
 
 		inline void tarjan(
-			std::unordered_map<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>& sccMap,
-			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>& transitionMap) {
+			std::unordered_map<DoubleID, DoubleID, HashDoubleID>& sccMap,
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID>& transitionMap) {
 
-			std::unordered_map<DoubleID, ID, HashDoubleID, EqualDoubleID> index, low;
-			std::unordered_map<DoubleID, bool, HashDoubleID, EqualDoubleID> onStack;
+			std::unordered_map<DoubleID, u64, HashDoubleID> index, low;
+			std::unordered_map<DoubleID, bool, HashDoubleID> onStack;
 
-			TarjanDFAdata data = {};
-			data.index = &index;
-			data.low = &low;
-			data.onStack = &onStack;
-			data.transitionMap = &transitionMap;
-			data.indexCt = 1;
+			TarjanDFSdata data = { index, low, onStack, transitionMap, 1 };
 
-			std::unordered_set<DoubleID, HashDoubleID, EqualDoubleID> idSet;
+			std::unordered_set<DoubleID, HashDoubleID> idSet;
 			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
 				idSet.insert(it->first);
 				idSet.insert(it->second);
@@ -424,21 +416,18 @@ namespace parser_generator {
 				if (index[*it])
 					continue;
 
-				tarjanDFA(&data, *it);
-				for (auto si = onStack.begin(); si != onStack.end(); ++si)
-					si->second = false;
+				tarjanDFS(data, *it);
 			}
 
 			std::unordered_map<ID, DoubleID> rIndex;
 			for (auto it = index.begin(); it != index.end(); ++it)
 				rIndex[it->second] = it->first;
 
-			for (auto it = idSet.begin(); it != idSet.end(); ++it) {
+			for (auto it = idSet.begin(); it != idSet.end(); ++it)
 				sccMap[*it] = rIndex[low[*it]];
-			}
 		}
 
-		inline DoubleID replaceScc(DoubleID id, std::unordered_map<DoubleID, DoubleID, HashDoubleID, EqualDoubleID>& sccMap) {
+		inline DoubleID replaceScc(DoubleID id, std::unordered_map<DoubleID, DoubleID, HashDoubleID>& sccMap) {
 			auto it = sccMap.find(id);
 			if (it == sccMap.end())
 				return id;
@@ -463,7 +452,7 @@ namespace parser_generator {
 			std::unordered_map<Element, std::vector<u64>> firstCache;
 			std::unordered_map<ID, std::unordered_map<ID, TableData>> lookaheadTable;
 			std::unordered_map<ID, std::unordered_set<ID>> visited;
-			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID> rRefMap;
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID> rRefMap;
 
 			typedef struct _QData {
 				ID closureId, itemId;
@@ -492,6 +481,15 @@ namespace parser_generator {
 				}
 			}
 
+			/*
+			std::map<std::pair<ID, ID>, std::pair<ID, ID>> ORRef;
+			for (auto it = rRefMap.begin(); it != rRefMap.end(); ++it)
+				ORRef.insert({ { it->first.closureId, it->first.itemId }, { it->second.closureId, it->second.itemId } });
+
+			std::cout << "rRefMap" << std::endl;
+			for (auto it = ORRef.begin(); it != ORRef.end(); ++it)
+				std::cout << "  " << it->first.first << ", " << it->first.second << " -> " << it->second.first << ", " << it->second.second << std::endl;*/
+
 			for (auto it = startItems.begin(); it != startItems.end(); ++it) {
 				lookaheadTable[it->first][it->second].ref.clear();
 				std::vector<u64>& startLook = lookaheadTable[it->first][it->second].lookaheadSet;
@@ -499,10 +497,26 @@ namespace parser_generator {
 				startLook[eot >> 6] |= (u64)1 << (eot & 0b111111);
 			}
 
-			std::unordered_map<DoubleID, DoubleID, HashDoubleID, EqualDoubleID> sccMap;
-			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID, EqualDoubleID> sccRRefMap;
+			std::unordered_map<DoubleID, DoubleID, HashDoubleID> sccMap;
+			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID> sccRRefMap;
 			std::set<std::pair<std::pair<ID, ID>, std::pair<ID, ID>>> sccRRefSet;
 			tarjan(sccMap, rRefMap);
+
+			typedef struct _DIDC {
+				bool operator() (const DoubleID& left, const DoubleID& right) const {
+					return (left.closureId < right.closureId || (left.closureId == right.closureId && left.itemId < right.itemId));
+				}
+			} DIDC;
+
+			/*
+			std::map<DoubleID, DoubleID, DIDC> sccOM;
+			for (auto it = sccMap.begin(); it != sccMap.end(); ++it)
+				sccOM.insert({ it->first, it->second });
+
+			std::cout << "SCC Map:" << std::endl;
+			for (auto it = sccOM.begin(); it != sccOM.end(); ++it) {
+				std::cout << "  " << it->first.closureId << ", " << it->first.itemId << " -> " << it->second.closureId << ", " << it->second.itemId << std::endl;
+			}*/
 
 			for (auto it = rRefMap.begin(); it != rRefMap.end(); ++it) {
 				DoubleID first = replaceScc(it->first, sccMap), second = replaceScc(it->second, sccMap);
@@ -510,7 +524,7 @@ namespace parser_generator {
 					sccRRefMap.insert({ first, second });
 			}
 
-			std::unordered_map<DoubleID, std::unordered_set<DoubleID, HashDoubleID, EqualDoubleID>, HashDoubleID, EqualDoubleID> sccRefTable;
+			std::unordered_map<DoubleID, std::unordered_set<DoubleID, HashDoubleID>, HashDoubleID> sccRefTable;
 
 			for (auto it = sccMap.begin(); it != sccMap.end(); ++it) {
 				TableData& cur = lookaheadTable[it->first.closureId][it->first.itemId];
@@ -524,7 +538,7 @@ namespace parser_generator {
 			}
 
 			std::vector<DoubleID> orderedSet;
-			std::unordered_map<DoubleID, u64, HashDoubleID, EqualDoubleID> inDegree;
+			std::unordered_map<DoubleID, u64, HashDoubleID> inDegree;
 			std::queue<DoubleID> sortQ;
 
 			for (auto it = sccRRefMap.begin(); it != sccRRefMap.end(); ++it) {
@@ -748,7 +762,7 @@ namespace parser_generator {
 					table.gotoTable[it->first][it->second.second - terminalEnd] = { it->second.first, false };
 			}
 
-			//std::cout << "SRR conflict:" << std::endl;
+			/*std::cout << "SRR conflict:" << std::endl;*/
 
 			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
 				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
@@ -766,12 +780,11 @@ namespace parser_generator {
 								if (it->first >= table.size)
 									std::cout << "tableSize error" << std::endl;
 								if (i * 64 + j >= table.actionSize)
-									std::cout << "actionSize error" << std::endl;*/
-								table.actionTable[it->first][i * 64 + j] = { item.prodId, type };
-
-								/*
+									std::cout << "actionSize error" << std::endl;
 								if (!handledReduce.insert({ { it->first, i * 64 + j }, (int)item.prodId }).second)
 									std::cout << "  state" << it->first << ", " << (i * 64 + j) << ", item " << item.prodId << ", prev" << handledReduce[{it->first, i * 64 + j}] << std::endl;*/
+
+								table.actionTable[it->first][i * 64 + j] = { item.prodId, type };
 							}
 							bit >>= 1;
 						}
@@ -779,7 +792,7 @@ namespace parser_generator {
 				}
 			}
 
-			//printTable(table, 3);
+			/*printTable(table, 3);*/
 		}
 
 		std::string int2str(int num, int len) {
@@ -886,12 +899,12 @@ namespace parser_generator {
 				switch (action.type) {
 					case AT::Shift:
 						stack.push({ (Element)(*it), action.arg });
-						//std::cout << "Shift" << action.arg << " " << (int)(*it) << std::endl;
+						/*std::cout << "Shift" << action.arg << " " << (int)(*it) << std::endl;*/
 						++it;
 						break;
 					case AT::Reduce: {
 						parseList.push_back(action.arg);
-						//std::cout << "Reduce" << action.arg << std::endl;
+						/*std::cout << "Reduce" << action.arg << std::endl;*/
 						auto grammer = this->grammerVec[action.arg];
 						for (size_t i = 0; i < grammer.second.size(); i++)
 							stack.pop();
@@ -899,14 +912,14 @@ namespace parser_generator {
 						if (goData.error)
 							return false;
 						stack.push({ (Element)grammer.first, goData.state });
-						//std::cout << "Goto" << goData.state << std::endl;
+						/*std::cout << "Goto" << goData.state << std::endl;*/
 					}
 						break;
 					case AT::Accept:
-						//std::cout << "Accept" << std::endl;
+						/*std::cout << "Accept" << std::endl;*/
 						return true;
 					case AT::Error:
-						//std::cout << "Error at input " << (int)(*it) << std::endl;
+						/*std::cout << "Error at input " << (int)(*it) << std::endl;*/
 						return false;
 				}
 			}

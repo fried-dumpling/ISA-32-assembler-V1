@@ -880,33 +880,33 @@ namespace lexer_generator {
 					}
 				}
 
-				typedef struct _TarjanDFAdata {
-					std::unordered_map<ID, ID>* index;
-					std::unordered_map<ID, ID>* low;
-					std::unordered_map<ID, bool>* onStack;
-					std::unordered_multimap<ID, ID>* transitionMap;
+				typedef struct _TarjanDFSdata {
+					std::unordered_map<ID, ID>& index;
+					std::unordered_map<ID, ID>& low;
+					std::unordered_map<ID, bool>& onStack;
+					std::unordered_multimap<ID, ID>& transitionMap;
 					int indexCt;
-				} TarjanDFAdata;
+				} TarjanDFSdata;
 
-				inline void tarjanDFA(TarjanDFAdata* data, ID id) {
+				inline void tarjanDFS(TarjanDFSdata& data, ID id) {
+					data.index[id] = data.indexCt++;
+					data.low[id] = data.index[id];
+					data.onStack[id] = true;
 
-					(*data->index)[id] = data->indexCt++;
-					(*data->low)[id] = (*data->index)[id];
-					(*data->onStack)[id] = true;
+					auto range = data.transitionMap.equal_range(id);
 
-					auto range = data->transitionMap->equal_range(id);
 					for (auto it = range.first; it != range.second; ++it) {
-						if ((*data->onStack)[it->second]) {
-							(*data->low)[id] = std::min((*data->low)[id], (*data->index)[it->second]);
+						if (!data.index[it->second]) {
+							tarjanDFS(data, it->second);
+							data.low[id] = std::min(data.low[id], data.low[it->second]);
 							continue;
 						}
 
-						if ((*data->index)[it->second])
-							continue;
-
-						tarjanDFA(data, it->second);
-						(*data->low)[id] = std::min((*data->low)[id], (*data->low)[it->second]);
+						if (data.onStack[it->second])
+							data.low[id] = std::min(data.low[id], data.index[it->second]);
 					}
+
+					data.onStack[id] = false;
 				}
 
 				inline void tarjan(
@@ -916,12 +916,7 @@ namespace lexer_generator {
 					std::unordered_map<ID, ID> index, low;
 					std::unordered_map<ID, bool> onStack;
 
-					TarjanDFAdata data = {};
-					data.index = &index;
-					data.low = &low;
-					data.onStack = &onStack;
-					data.transitionMap = &transitionMap;
-					data.indexCt = 1;
+					TarjanDFSdata data = { index, low, onStack, transitionMap, 1};
 
 					std::unordered_set<ID> idSet;
 					for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
@@ -933,7 +928,7 @@ namespace lexer_generator {
 						if (index[*it])
 							continue;
 
-						tarjanDFA(&data, *it);
+						tarjanDFS(data, *it);
 						for (auto si = onStack.begin(); si != onStack.end(); ++si)
 							si->second = false;
 					}

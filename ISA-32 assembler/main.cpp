@@ -7,6 +7,7 @@
 #include <map>
 #include <set>
 #include <functional>
+#include <chrono>
 
 #include "lexer.hpp"
 #include "parser.hpp"
@@ -410,9 +411,44 @@ namespace assembler {
 			reg_gen,
 			reg_reg,
 
+			flagid,
+
 			label,
 
 			expression,
+			expressionL0,
+			expressionL1,
+			expressionL2,
+			expressionL3,
+			expressionL4,
+			expressionL5,
+			expressionL6,
+			expressionL7,
+
+			operatorL1,
+			operatorL2,
+			operatorL3,
+			operatorL4,
+			operatorL5,
+			operatorL6,
+			operatorL7,
+
+			operationL1,
+			operationL2,
+			operationL3,
+			operationL4,
+			operationL5,
+			operationL6,
+			operationL7,
+
+			define,
+			macro,
+			scope,
+
+			constant,
+
+			allocate,
+
 			number,
 		NTEND();
 
@@ -427,15 +463,44 @@ namespace assembler {
 
 
 			{ NonterminalType::intruction, "intruction" },
+
 			{ NonterminalType::reg, "reg" },
 			{ NonterminalType::regid, "regid" },
 			{ NonterminalType::regmode, "regmode" },
 			{ NonterminalType::reg_gen, "reg_gen" },
 			{ NonterminalType::reg_reg, "reg_reg" },
 
+			{ NonterminalType::flagid, "flagid" },
+
 			{ NonterminalType::label, "label" },
 
 			{ NonterminalType::expression, "expression" },
+
+			{ NonterminalType::expressionL0, "expressionL0" },
+			{ NonterminalType::expressionL1, "expressionL1" },
+			{ NonterminalType::expressionL2, "expressionL2" },
+			{ NonterminalType::expressionL3, "expressionL3" },
+			{ NonterminalType::expressionL4, "expressionL4" },
+			{ NonterminalType::expressionL5, "expressionL5" },
+			{ NonterminalType::expressionL6, "expressionL6" },
+			{ NonterminalType::expressionL7, "expressionL7" },
+
+			{ NonterminalType::operatorL1, "operatorL1" },
+			{ NonterminalType::operatorL2, "operatorL2" },
+			{ NonterminalType::operatorL3, "operatorL3" },
+			{ NonterminalType::operatorL4, "operatorL4" },
+			{ NonterminalType::operatorL5, "operatorL5" },
+			{ NonterminalType::operatorL6, "operatorL6" },
+			{ NonterminalType::operatorL7, "operatorL7" },
+
+			{ NonterminalType::operationL1, "operationL1" },
+			{ NonterminalType::operationL2, "operationL2" },
+			{ NonterminalType::operationL3, "operationL3" },
+			{ NonterminalType::operationL4, "operationL4" },
+			{ NonterminalType::operationL5, "operationL5" },
+			{ NonterminalType::operationL6, "operationL6" },
+			{ NonterminalType::operationL7, "operationL7" },
+
 			{ NonterminalType::number, "number" }
 		};
 
@@ -488,11 +553,11 @@ namespace assembler {
 			{ NT::intruction, { TT::push, NT::reg } },
 			{ NT::intruction, { TT::pop, NT::reg } },
 
-			{ NT::intruction, { TT::ld, TT::dot, NT::regid, NT::reg, NT::expression} },
-			{ NT::intruction, { TT::st, TT::dot, NT::regid, NT::reg, NT::expression} },
+			{ NT::intruction, { TT::ld, TT::dot, NT::regid, NT::reg, NT::expression } },
+			{ NT::intruction, { TT::st, TT::dot, NT::regid, NT::reg, NT::expression } },
 
-			{ NT::intruction, { TT::jmp, NT::expression, TT::dot, NT::regmode } },
-			{ NT::intruction, { TT::call, NT::expression } },
+			{ NT::intruction, { TT::jmp, TT::dot, NT::flagid, NT::reg, NT::expression } },
+			{ NT::intruction, { TT::call } },
 			{ NT::intruction, { TT::ret } },
 			{ NT::intruction, { TT::nop } },
 			{ NT::intruction, { TT::halt } },
@@ -521,14 +586,49 @@ namespace assembler {
 			{ NT::regmode, { TT::_S8L_} },
 			{ NT::regmode, { TT::_S8H_} },
 
+			{ NT::flagid, { TT::zero } },
+			{ NT::flagid, { TT::neg } },
+			{ NT::flagid, { TT::pos } },
+			{ NT::flagid, { TT::carry } },
+			{ NT::flagid, { TT::carry4 } },
+			{ NT::flagid, { TT::overflow } },
+			{ NT::flagid, { TT::one } },
+			{ NT::flagid, { TT::gen } },
+
 			{ NT::label, { TT::identifier, TT::colon } },
 
-			{ NT::expression, { NT::number } },
+			{ NT::expression, { NT::expressionL7 } },
+
+			{ NT::expressionL7, { NT::expressionL7, TT::verticalbar, NT::expressionL6 } },
+			{ NT::expressionL7, { NT::expressionL6 } },
+
+			{ NT::expressionL6, { NT::expressionL6, TT::caret, NT::expressionL5 } },
+			{ NT::expressionL6, { NT::expressionL5 } },
+
+			{ NT::expressionL5, { NT::expressionL5, TT::ampersend, NT::expressionL4} },
+			{ NT::expressionL5, { NT::expressionL4 } },
+
+			{ NT::expressionL4, { NT::expressionL4, TT::plus, NT::expressionL3 } },
+			{ NT::expressionL4, { NT::expressionL4, TT::minus, NT::expressionL3 } },
+			{ NT::expressionL4, { NT::expressionL3 } },
+
+			{ NT::expressionL3, { NT::expressionL3, TT::star, NT::expressionL2 } },
+			{ NT::expressionL3, { NT::expressionL3, TT::slash, NT::expressionL2 } },
+			{ NT::expressionL3, { NT::expressionL2 } },
+
+			{ NT::expressionL2, { NT::expressionL1, TT::dstar, NT::expressionL2 } },
+			{ NT::expressionL2, { NT::expressionL1 } },
+
+			{ NT::expressionL1, { TT::tilde, NT::expressionL0 } },
+			{ NT::expressionL1, { NT::expressionL0 } },
+
+			{ NT::expressionL0, { TT::openparen, NT::expressionL7, TT::closeparen} },
+			{ NT::expressionL0, { NT::number} },
 
 			{ NT::number, { TT::hexnum } },
 			{ NT::number, { TT::decnum } },
 			{ NT::number, { TT::octnum } },
-			{ NT::number, { TT::binnum } },
+			{ NT::number, { TT::binnum } }
 		};
 
 		ParserFactoy parserFactory;
@@ -536,6 +636,8 @@ namespace assembler {
 
 		inline void createParser(void) {
 			parserFactory.setRules(CreateData);
+
+			std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
 			parserFactory.update();
 			parser = parserFactory.create();
 		}
