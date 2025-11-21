@@ -3,10 +3,8 @@
 
 #include <iostream>
 
-#include <functional>
 #include <string>
 #include <vector>
-#include <list>
 
 #include <map>
 #include <set>
@@ -16,9 +14,11 @@
 
 #include <queue>
 #include <stack>
-#include <deque>
 
 #include <utility>
+
+#define TOKENSTART(name) enum class name { __unknown = -1, __epsilon = 0,
+#define TOKENEND() __eot, __end }
 
 namespace lexer_generator {
 	namespace graph {
@@ -700,9 +700,12 @@ namespace lexer_generator {
 					switch (it->type) {
 					case TokenType::CLASS_OPEN:
 					case TokenType::INVCLASS_OPEN:
-					case TokenType::DOT:
 					case TokenType::CHAR: {
 						stack.push(EqData(*it));
+						break;
+					}
+					case TokenType::DOT: {
+						stack.push(EqData(gen_dot()));
 						break;
 					}
 					case TokenType::CLASS_CLOSE: {
@@ -877,33 +880,33 @@ namespace lexer_generator {
 					}
 				}
 
-				typedef struct _TarjanDFAdata {
-					std::unordered_map<ID, ID>* index;
-					std::unordered_map<ID, ID>* low;
-					std::unordered_map<ID, bool>* onStack;
-					std::unordered_multimap<ID, ID>* transitionMap;
+				typedef struct _TarjanDFSdata {
+					std::unordered_map<ID, ID>& index;
+					std::unordered_map<ID, ID>& low;
+					std::unordered_map<ID, bool>& onStack;
+					std::unordered_multimap<ID, ID>& transitionMap;
 					int indexCt;
-				} TarjanDFAdata;
+				} TarjanDFSdata;
 
-				inline void tarjanDFA(TarjanDFAdata* data, ID id) {
+				inline void tarjanDFS(TarjanDFSdata& data, ID id) {
+					data.index[id] = data.indexCt++;
+					data.low[id] = data.index[id];
+					data.onStack[id] = true;
 
-					(*data->index)[id] = data->indexCt++;
-					(*data->low)[id] = (*data->index)[id];
-					(*data->onStack)[id] = true;
+					auto range = data.transitionMap.equal_range(id);
 
-					auto range = data->transitionMap->equal_range(id);
 					for (auto it = range.first; it != range.second; ++it) {
-						if ((*data->onStack)[it->second]) {
-							(*data->low)[id] = std::min((*data->low)[id], (*data->index)[it->second]);
+						if (!data.index[it->second]) {
+							tarjanDFS(data, it->second);
+							data.low[id] = std::min(data.low[id], data.low[it->second]);
 							continue;
 						}
 
-						if ((*data->index)[it->second])
-							continue;
-
-						tarjanDFA(data, it->second);
-						(*data->low)[id] = std::min((*data->low)[id], (*data->low)[it->second]);
+						if (data.onStack[it->second])
+							data.low[id] = std::min(data.low[id], data.index[it->second]);
 					}
+
+					data.onStack[id] = false;
 				}
 
 				inline void tarjan(
@@ -913,12 +916,7 @@ namespace lexer_generator {
 					std::unordered_map<ID, ID> index, low;
 					std::unordered_map<ID, bool> onStack;
 
-					TarjanDFAdata data = {};
-					data.index = &index;
-					data.low = &low;
-					data.onStack = &onStack;
-					data.transitionMap = &transitionMap;
-					data.indexCt = 1;
+					TarjanDFSdata data = { index, low, onStack, transitionMap, 1};
 
 					std::unordered_set<ID> idSet;
 					for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
@@ -930,7 +928,7 @@ namespace lexer_generator {
 						if (index[*it])
 							continue;
 
-						tarjanDFA(&data, *it);
+						tarjanDFS(data, *it);
 						for (auto si = onStack.begin(); si != onStack.end(); ++si)
 							si->second = false;
 					}
@@ -1054,7 +1052,7 @@ namespace lexer_generator {
 						epsilonQ.push({ it->second, cur.cur, cur.shift });
 					}
 				}
-
+					 
 				/*
 				std::cout << "sccMap:" << std::endl;
 				for (auto it = sccMap.begin(); it != sccMap.end(); ++it) {
@@ -1138,7 +1136,7 @@ namespace lexer_generator {
 					}
 				} LessIDbit;
 
-				UIDSet setIdSet;
+				ID setId = 0;
 				std::map<std::map<u64, std::vector<u64>>, ID, LessIDbit> subsetMap;
 				std::unordered_map<ID, std::unordered_map<ID, std::bitset<128>>> subsetTransitionMap;
 
@@ -1149,7 +1147,7 @@ namespace lexer_generator {
 
 				std::queue<SQData> subsetQ;
 
-				ID startID = setIdSet.genID();
+				ID startID = setId++;
 
 				std::map<u64, std::vector<u64>> startBits = {};
 				u64 startShift = bitsMap[tGraph.start].second;
@@ -1190,7 +1188,7 @@ namespace lexer_generator {
 
 						bool found = (subsetMap.find(set) != subsetMap.end());
 						if (!found)
-							subsetMap[set] = setIdSet.genID();
+							subsetMap[set] = setId++;
 
 						ID curID = subsetMap[set];
 						subsetTransitionMap[cur.prev][curID].set(it->first);
@@ -1214,7 +1212,7 @@ namespace lexer_generator {
 
 				out.start = 0;
 
-				for (ID i = 0; i <= setIdSet.getMax(); i++)
+				for (ID i = 0; i < setId; i++)
 					out.set.genID(i);
 
 				for (auto it = subsetMap.begin(); it != subsetMap.end(); ++it) {
@@ -1347,6 +1345,10 @@ namespace lexer_generator {
 		typedef struct _Token {
 			std::string text;
 			TokenType type;
+
+			operator TokenType() const {
+				return this->type;
+			}
 		} Token;
 
 		void lex(std::vector<Token>& tokens, std::string& text) {
@@ -1418,11 +1420,25 @@ namespace lexer_generator {
 		std::unordered_multimap<ID, EndData> endDatas;
 		Table dfaTable;
 
+		void clearTable(void) {
+			if (this->dfaTable.table != NULL) {
+				for (size_t i = 0; i < this->dfaTable.size; i++)
+					delete[] this->dfaTable.table[i];
+				delete[] this->dfaTable.table;
+			}
+			this->dfaTable.size = 0;
+			this->dfaTable.table = NULL;
+		}
+
 	public:
 		LexerFactory(void) {
 			this->rules.clear();
 			this->dfaTable.size = 0;
 			this->dfaTable.table = NULL;
+		}
+
+		~LexerFactory() {
+			this->clearTable();
 		}
 
 		void setRules(const CreateData& data) {
@@ -1437,8 +1453,7 @@ namespace lexer_generator {
 		}
 
 		void update(void) {
-			this->dfaTable.size = 0;
-			this->dfaTable.table = NULL;
+			this->clearTable();
 
 			std::unordered_map<ID, std::unordered_map<ID, EndData>> NFAendDatas;
 			std::vector<Graph> NFAs;

@@ -3,4 +3,4 @@ start_label:
 	add %gen[0].32B %gen[1].32B
 	sub %gen[0].32B %gen[1].32B
 load_label:
-	ld.gen[0] %gen[1].32B 0x1234
+	ld.gen[0] %gen[1].32B 64 * 5 + 31
