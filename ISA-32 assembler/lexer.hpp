@@ -1346,8 +1346,12 @@ namespace lexer_generator {
 			std::string text;
 			TokenType type;
 
-			operator TokenType() const {
+			inline operator TokenType() const {
 				return this->type;
+			}
+
+			inline operator u64() const {
+				return (u64)this->type;
 			}
 		} Token;
 
