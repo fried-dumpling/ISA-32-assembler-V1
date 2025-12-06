@@ -11,23 +11,33 @@
 
 #include "lexer.hpp"
 #include "parser.hpp"
+#include "evaluator.hpp"
 
 using namespace std;
 
 namespace assembler {
 	namespace lexer {
+		using u64 = unsigned __int64;
+
 		TOKENSTART(TokenType)
 			add, addc, addi,
 			sub, subc, subi,
 			bxr, bxri,
 			bor, bori,
 			bnd, bndi,
-			shiftl, shiftr, shiftli, shiftri,
-			cmp,
+			shiftl, shiftlc, shiftli, 
+			shiftr, shiftrc, shiftri,
+			rol, roli, ror, rori,
+			cmp, test,
 
 			mov, set,
 			push, pop,
+
+			rbr, abr,
+			irbr, iabr,
+
 			ld, st,
+
 			jmp,
 			call, ret,
 			nop, halt,
@@ -41,6 +51,9 @@ namespace assembler {
 			_32B_, _16L_, _8L_, _8H_, _16H_, _S16L_, _S8L_, _S8H_,
 
 			text, data, bss,
+
+			define,
+			macro,
 
 			dot,
 
@@ -60,7 +73,9 @@ namespace assembler {
 			whitespace,
 			newline,
 
+			string,
 			identifier,
+
 		TOKENEND();
 
 		using LexerFactoy = lexer_generator::LexerFactory<TokenType>;
@@ -83,14 +98,25 @@ namespace assembler {
 				{ "bnd", TokenType::bnd },
 				{ "bndi", TokenType::bndi },
 				{ "shiftl", TokenType::shiftl },
-				{ "shiftr", TokenType::shiftr },
+				{ "shiftlc", TokenType::shiftlc },
 				{ "shiftli", TokenType::shiftli },
+				{ "shiftr", TokenType::shiftr },
+				{ "shiftrc", TokenType::shiftrc },
 				{ "shiftri", TokenType::shiftri },
+				{ "rol", TokenType::rol },
+				{ "roli", TokenType::roli},
+				{ "ror", TokenType::ror},
+				{ "rori", TokenType::rori},
 				{ "cmp", TokenType::cmp },
+				{ "test", TokenType::test },
 				{ "mov", TokenType::mov },
 				{ "set", TokenType::set },
 				{ "push", TokenType::push },
 				{ "pop", TokenType::pop },
+				{ "rbr", TokenType::rbr },
+				{ "abr", TokenType::abr },
+				{ "irbr", TokenType::irbr },
+				{ "iabr", TokenType::iabr },
 				{ "ld", TokenType::ld },
 				{ "st", TokenType::st },
 				{ "jmp", TokenType::jmp },
@@ -128,6 +154,9 @@ namespace assembler {
 				{ "\\.data", TokenType::data },
 				{ "\\.bss", TokenType::bss },
 
+				{ "#define", TokenType::define },
+				{ "#macro", TokenType::macro },
+
 				{ "\\.", TokenType::dot },
 				{ "\\(", TokenType::openparen },
 				{ "\\)", TokenType::closeparen },
@@ -155,8 +184,11 @@ namespace assembler {
 				{ "0b[01]+", TokenType::binnum },
 
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
+				{ "\"[^\n\"]*([^\n\"]+(\\\\[\n\"])+)*\"", TokenType::string },
 
-				{ "(;[^\n]*)|(##.*##)", TokenType::comment },
+				{ ";[^\n]*", TokenType::comment },
+				{ "/\\*[^*]*\\*+([^/*][^*]*\\*+)*/", TokenType::comment },
+
 				{ "[ \t]+", TokenType::whitespace },
 				{ "\n", TokenType::newline }
 			}
@@ -176,14 +208,25 @@ namespace assembler {
 			{ TokenType::bnd, "bnd" },
 			{ TokenType::bndi, "bndi" },
 			{ TokenType::shiftl, "shiftl" },
-			{ TokenType::shiftr, "shiftr" },
+			{ TokenType::shiftlc, "shiftlc" },
 			{ TokenType::shiftli, "shiftli" },
+			{ TokenType::shiftr, "shiftr" },
+			{ TokenType::shiftrc, "shiftrc" },
 			{ TokenType::shiftri, "shiftri" },
+			{ TokenType::rbr, "rbr" },
+			{ TokenType::abr, "abr" },
+			{ TokenType::irbr, "irbr" },
+			{ TokenType::iabr, "iabr" },
 			{ TokenType::cmp, "cmp" },
+			{ TokenType::test, "test" },
 			{ TokenType::mov, "mov" },
 			{ TokenType::set, "set" },
 			{ TokenType::push, "push" },
 			{ TokenType::pop, "pop" },
+			{ TokenType::rbr, "rbr" },
+			{ TokenType::abr, "abr" },
+			{ TokenType::irbr, "irbr" },
+			{ TokenType::iabr, "iabr" },
 			{ TokenType::ld, "ld" },
 			{ TokenType::st, "st" },
 			{ TokenType::jmp, "jmp" },
@@ -221,6 +264,9 @@ namespace assembler {
 			{ TokenType::data, ".data" },
 			{ TokenType::bss, ".bss" },
 
+			{ TokenType::define, "define" },
+			{ TokenType::macro, "macro" },
+
 			{ TokenType::dot, "dot" },
 			{ TokenType::openparen, "openparen" },
 			{ TokenType::closeparen, "closeparen" },
@@ -249,6 +295,7 @@ namespace assembler {
 
 			{ TokenType::newline, "newline" },
 			{ TokenType::identifier, "identifier" },
+			{ TokenType::string, "string" },
 
 			{ TokenType::__epsilon, "epsilon" },
 			{ TokenType::__unknown, "unknown" }
@@ -265,17 +312,31 @@ namespace assembler {
 	}
 
 	namespace parser {
+		using u64 = unsigned __int64;
+
 		using TokenType = lexer::TokenType;
 		int a = (int)TokenType::__end;
 
 		NTSTART(NonterminalType)
 			program,
 			section,
+
 			text_section,
 			data_section,
 			bss_section,
+			outer_section,
 
 			intruction,
+			label,
+			label_text,
+			label_data,
+			label_bss,
+
+			allocate,
+			allocate_zero,
+
+			define,
+			macro,
 
 			reg,
 			regid,
@@ -285,9 +346,10 @@ namespace assembler {
 
 			flagid,
 
-			label,
-
 			index,
+
+			immidate16,
+			immidate8,
 
 			expression,
 			expressionL0,
@@ -315,14 +377,6 @@ namespace assembler {
 			operationL6,
 			operationL7,
 
-			define,
-			macro,
-			scope,
-
-			constant,
-
-			allocate,
-
 			number,
 		NTEND();
 
@@ -336,12 +390,27 @@ namespace assembler {
 			text_section,
 			data_section,
 			bss_section,
+			outer_section,
+
+			allocate,
+			allocate_zero,
+
+			define,
+			macro,
 
 			instruction_N,
 			instruction_R,
 			instruction_RR,
 			instruction_RI,
-			instruction_VRI,
+			instruction_II,
+			instruction_IRI,
+			instruction_RVRI,
+			instruction_FVRI,
+
+			label,
+			label_text,
+			label_data,
+			label_bss,
 
 			reg,
 			regid,
@@ -350,9 +419,10 @@ namespace assembler {
 
 			flagid,
 
-			label,
-
 			index,
+
+			immidate16,
+			immidate8,
 
 			expression,
 			operator_,
@@ -369,12 +439,21 @@ namespace assembler {
 
 			{ NonterminalType::program, "program" },
 			{ NonterminalType::section, "section" },
+
 			{ NonterminalType::text_section, "text_section" },
 			{ NonterminalType::data_section, "data_section" },
 			{ NonterminalType::bss_section, "bss_section" },
-
+			{ NonterminalType::outer_section, "outer_section" },
 
 			{ NonterminalType::intruction, "intruction" },
+			{ NonterminalType::label, "label" },
+			{ NonterminalType::label_text, "label_text" },
+			{ NonterminalType::label_data, "label_data" },
+			{ NonterminalType::label_bss, "label_bss" },
+			{ NonterminalType::allocate, "allocate" },
+			{ NonterminalType::allocate_zero, "allocate_zero" },
+			{ NonterminalType::define, "define" },
+			{ NonterminalType::macro, "macro" },
 
 			{ NonterminalType::reg, "reg" },
 			{ NonterminalType::regid, "regid" },
@@ -384,9 +463,10 @@ namespace assembler {
 
 			{ NonterminalType::flagid, "flagid" },
 
-			{ NonterminalType::label, "label" },
-
 			{ NonterminalType::index, "index" },
+
+			{ NonterminalType::immidate16, "immidate16" },
+			{ NonterminalType::immidate8, "immidate8" },
 
 			{ NonterminalType::expression, "expression" },
 
@@ -428,12 +508,24 @@ namespace assembler {
 			{ ASTNodeType::text_section, "text_section" },
 			{ ASTNodeType::data_section, "data_section" },
 			{ ASTNodeType::bss_section, "bss_section" },
+			{ ASTNodeType::outer_section, "outer_section" },
 
 			{ ASTNodeType::instruction_N, "instruction_N" },
 			{ ASTNodeType::instruction_R, "instruction_R" },
 			{ ASTNodeType::instruction_RR, "instruction_RR" },
 			{ ASTNodeType::instruction_RI, "instruction_RI" },
-			{ ASTNodeType::instruction_VRI, "instruction_VRI" },
+			{ ASTNodeType::instruction_II, "instruction_II" },
+			{ ASTNodeType::instruction_IRI, "instruction_IRI" },
+			{ ASTNodeType::instruction_RVRI, "instruction_RVRI" },
+			{ ASTNodeType::instruction_FVRI, "instruction_FVRI" },
+
+			{ ASTNodeType::allocate, "allocate" },
+			{ ASTNodeType::allocate_zero, "allocate_zero" },
+			{ ASTNodeType::label, "label" },
+			{ ASTNodeType::label_text, "label_text" },
+			{ ASTNodeType::label_data, "label_data" },
+			{ ASTNodeType::label_bss, "label_bss" },
+			{ ASTNodeType::define, "define" },
 
 			{ ASTNodeType::reg, "reg" },
 			{ ASTNodeType::regid, "regid" },
@@ -442,12 +534,13 @@ namespace assembler {
 
 			{ ASTNodeType::flagid, "flagid" },
 
-			{ ASTNodeType::label, "label" },
-
 			{ ASTNodeType::index, "index" },
 
+			{ ASTNodeType::immidate16, "immidate16" },
+			{ ASTNodeType::immidate8, "immidate8" },
+
 			{ ASTNodeType::expression, "expression" },
-			{ ASTNodeType::operator_, "operator_" },
+			{ ASTNodeType::operator_, "operator" },
 			{ ASTNodeType::operation, "operation" },
 
 			{ ASTNodeType::hex, "hex" },
@@ -469,87 +562,134 @@ namespace assembler {
 
 			{ { NT::program, AT::program, -1}, { { NT::section, true, true } } },
 
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, {NT::text_section, true, false }, {NT::section, true, true } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, {NT::data_section, true, false }, {NT::section, true, true } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, {NT::bss_section, true, false }, {NT::section, true, true } } },
+			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { NT::text_section, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::outer_section, -1 }, { { NT::outer_section, true, false }, { NT::section, true, true } } },
 
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, {NT::text_section, true, false } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, {NT::data_section, true, false} } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, {NT::bss_section, true, false } } },
+			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, { NT::text_section, true, false } } },
+			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, false} } },
+			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, false } } },
+			{ { NT::section, AT::outer_section, -1 }, { { NT::outer_section, true, false } } },
 
-			{ { NT::text_section, AT::text_section, -1 }, { { NT::intruction, true, false }, {NT::text_section, true, true } } },
-			{ { NT::text_section, AT::text_section, -1 }, { { NT::label, true, false }, { NT::text_section, true, true } } },
+			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { NT::section, true, true } } },
+			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::section, true, true } } },
+
+			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false } } },
+			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false } } },
+			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false } } },
+
+			{ { NT::outer_section, AT::define, 1 }, { { TT::define, false, false }, { TT::identifier, false, false }, { NT::expression, true, false } } },
+			{ { NT::outer_section, AT::define, 1 }, { { TT::define, false, false }, { TT::identifier, false, false }, { TT::string, true, false} } },
+			{ { NT::outer_section, AT::macro, 1 }, { { TT::macro, false, false }, { TT::identifier, false, false } } },
+
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate, true, false }, { NT::data_section, true, true } } },
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::label_data, true, false }, { NT::data_section, true, true } } },
+
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate, true, false } } },
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::label_data, true, false } } },
+
+			{ { NT::bss_section, AT::bss_section, -1 }, { { NT::allocate_zero, true, false }, { NT::bss_section, true, true } } },
+			{ { NT::bss_section, AT::bss_section, -1 }, { { NT::label_bss, true, false }, { NT::bss_section, true, true } } },
+
+			{ { NT::bss_section, AT::bss_section, -1 }, { { NT::allocate_zero, true, false } } },
+			{ { NT::bss_section, AT::bss_section, -1 }, { { NT::label_bss, true, false } } },
+
+			{ { NT::text_section, AT::text_section, -1 }, { { NT::intruction, true, false }, { NT::text_section, true, true } } },
+			{ { NT::text_section, AT::text_section, -1 }, { { NT::label_text, true, false }, { NT::text_section, true, true } } },
 
 			{ { NT::text_section, AT::text_section, -1 }, { { NT::intruction, true, false } } },
-			{ { NT::text_section, AT::text_section, -1 }, { { NT::label, true, false } } },
+			{ { NT::text_section, AT::text_section, -1 }, { { NT::label_text, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::add, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::addc, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::addi, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::addi, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::sub, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::subc, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::subi, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::subi, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::bxr, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::bxri, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::bxri, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::bor, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::bori, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::bori, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::bnd, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::bndi, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::bndi, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::shiftl, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::shiftli, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::shiftlc, false, false }, {NT::reg, true, false }, {NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::shiftli, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::shiftr, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::shiftri, false, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::shiftrc, false, false }, {NT::reg, true, false }, {NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::shiftri, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::ror, false, false }, {NT::reg, true, false }, {NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::rori, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::rol, false, false }, {NT::reg, true, false }, {NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::roli, false, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmp, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::test, false, false }, {NT::reg, true, false }, { NT::reg, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, {NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, {NT::immidate16, true, false } } },
 
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::push, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::pop, false, false }, {NT::reg, true, false } } },
 
-			{ { NT::intruction, AT::instruction_VRI, 0 }, { { TT::ld, false, false }, {TT::dot, false, false }, {NT::regid, true, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
-			{ { NT::intruction, AT::instruction_VRI, 0 }, { { TT::st, false, false }, {TT::dot, false, false }, {NT::regid, true, false }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_II, 0 }, { { TT::rbr, false, false }, { NT::immidate8, true, false }, { NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_IRI, 0 }, { { TT::abr, false, false }, { NT::immidate8, true, false }, { NT::reg, true, false }, { NT::immidate8, true, false } } },
+			{ { NT::intruction, AT::instruction_II, 0 }, { { TT::irbr, false, false }, { NT::immidate8, true, false }, { NT::immidate16, true, false} } },
+			{ { NT::intruction, AT::instruction_IRI, 0 }, { { TT::iabr, false, false }, { NT::immidate8, true, false }, { NT::reg, true, false }, { NT::immidate8, true, false } } },
 
-			{ { NT::intruction, AT::instruction_VRI, 0 }, { { TT::jmp, false, false }, {TT::dot, false, false }, {NT::flagid, true, true }, {NT::reg, true, false }, {NT::expression, true, false } } },
+			{ { NT::intruction, AT::instruction_RVRI, 0 }, { { TT::ld, false, false }, {TT::dot, false, false }, {NT::regid, true, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RVRI, 0 }, { { TT::st, false, false }, {TT::dot, false, false }, {NT::regid, true, false }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
+
+			{ { NT::intruction, AT::instruction_FVRI, 0 }, { { TT::jmp, false, false }, {TT::dot, false, false }, {NT::flagid, true, true }, {NT::reg, true, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::call, false, false } } },
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::ret, false, false } } },
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::nop, false, false } } },
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::halt, false, false } } },
 
-			{ { NT::reg, AT::reg, 1 }, { { TT::percent, false, false }, {NT::regid, true, false }, {TT::dot, false, false }, {NT::regmode, true, true } } },
+			{ { NT::reg, AT::reg, 1 }, { { TT::percent, false, false }, {NT::regid, true, false }, {TT::dot, false, false }, {NT::regmode, true, false } } },
 
 			{ { NT::regid, AT::__epsilon, 0 }, { { NT::reg_gen, true, true } } },
 			{ { NT::regid, AT::__epsilon, 0 }, { { NT::reg_reg, true, true } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::sbp, true, false } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::zero, true, false } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::one, true, false } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::full, true, false } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::pc, true, false } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::stack, true, false } } },
-			{ { NT::regid, AT::regid, -1 }, { { TT::flag, true, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::sbp, false, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::zero, false, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::one, false, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::full, false, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::pc, false, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::stack, false, false } } },
+			{ { NT::regid, AT::regid, 0 }, { { TT::flag, false, false } } },
 
-			{ { NT::reg_gen, AT::reg_index, -1 }, { { TT::gen, true, false }, { NT::index, true, false } } },
-			{ { NT::reg_reg, AT::reg_index, -1 }, { { TT::reg, true, false }, { NT::index, true, false } } },
+			{ { NT::reg_gen, AT::reg_index, 0 }, { { TT::gen, false, false }, { NT::index, true, false } } },
+			{ { NT::reg_reg, AT::reg_index, 0 }, { { TT::reg, false, false }, { NT::index, true, false } } },
 
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_32B_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_16L_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_16H_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_8L_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_8H_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_S16L_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_S8L_, true, false } } },
-			{ { NT::regmode, AT::regmode, -1 }, { { TT::_S8H_, true, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_32B_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_16L_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_16H_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_8L_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_8H_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_S16L_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_S8L_, false, false } } },
+			{ { NT::regmode, AT::regmode, 0 }, { { TT::_S8H_, false, false } } },
 
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::zero, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::neg, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::pos, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::carry, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::carry4, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::overflow, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::one, true, false } } },
-			{ { NT::flagid, AT::flagid, -1 }, { { TT::gen, true, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::zero, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::neg, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::pos, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::carry, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::carry4, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::overflow, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::one, false, false } } },
+			{ { NT::flagid, AT::flagid, 0 }, { { TT::gen, false, false } } },
 
-			{ { NT::label, AT::label, 0 }, { { TT::identifier, false, false }, {TT::colon, false, false } } },
+			{ { NT::immidate16, AT::immidate16, -1 }, { { NT::expression, true, false } } },
+			{ { NT::immidate8, AT::immidate8, -1 }, { { NT::expression, true, false } } },
+
+			{ { NT::label_text, AT::label_text, 0 }, { { NT::label, true, true } } },
+			{ { NT::label_data, AT::label_data, 0 }, { { NT::label, true, true } } },
+			{ { NT::label_bss, AT::label_bss, 0 }, { { NT::label, true, true } } },
+			{ { NT::label, AT::label, 0 }, { { TT::identifier, false, false }, { TT::colon, false, false } } },
+
+			{ { NT::allocate, AT::allocate, 0 }, { { NT::expression, true, false }, { NT::expression, true, false } } },
+			{ { NT::allocate_zero, AT::allocate_zero, 0 }, { { NT::expression, true, false } } },
 
 			{ { NT::index, AT::index, -1 }, { { TT::openbrack, false, false }, { NT::expression, true, false }, { TT::closebrack, false, false } } },
 
@@ -580,11 +720,12 @@ namespace assembler {
 
 			{ { NT::expressionL0, AT::__epsilon, 1 }, { { TT::openparen, false, false }, {NT::expressionL7, true, false }, { TT::closeparen, false, false } } },
 			{ { NT::expressionL0, AT::__epsilon, 0 }, { { NT::number, false , false } } },
+			{ { NT::expressionL0, AT::__epsilon, 0 }, { { TT::identifier, false , false } } },
 
-			{ { NT::number, AT::hex, 0 }, { { TT::hexnum, false, false } } },
-			{ { NT::number, AT::dec, 0 }, { { TT::decnum, false, false } } },
-			{ { NT::number, AT::oct, 0 }, { { TT::octnum, false, false } } },
-			{ { NT::number, AT::bin, 0 }, { { TT::binnum, false, false } } }
+			{ { NT::number, AT::__epsilon, 0 }, { { TT::hexnum, false, false } } },
+			{ { NT::number, AT::__epsilon, 0 }, { { TT::decnum, false, false } } },
+			{ { NT::number, AT::__epsilon, 0 }, { { TT::octnum, false, false } } },
+			{ { NT::number, AT::__epsilon, 0 }, { { TT::binnum, false, false } } }
 		};
 
 		ParserFactoy parserFactory;
@@ -600,16 +741,483 @@ namespace assembler {
 	}
 
 	namespace evaluator {
+		using u64 = unsigned __int64;
+		using u32 = unsigned __int32;
+		using s32 = __int32;
+
+		using TokenType = lexer::TokenType;
+		using NonterminalType = parser::NonterminalType;
+		using ASTNodeType = parser::ASTNodeType;
+		using AST = parser::Parser::ASTNode;
+
+		using Evaluator = evaluator_generator::Evaluator<TokenType, NonterminalType, ASTNodeType>;
+		using pEvalFunc = Evaluator::EvaluateFunction;
+		
+		namespace functions {
+			typedef struct _EvalData {
+				std::unordered_map<std::string, AST*> defineTable;
+
+				u32	textByte;
+				u32 dataByte;
+				u64 bssByte;
+
+				std::unordered_map<std::string, u32> idenifierValue;
+				std::unordered_map<AST*, s32> expressionValue;
+
+				std::unordered_map<AST*, u32> instructionValue;
+				std::unordered_map<AST*, u32> dataValue;
+
+				std::vector<u32> textSection;
+				std::vector<u32> dataSection;
+				std::vector<u32> bssSection;
+
+				std::vector<u32> rawData;
+
+				_EvalData() : textByte(0), dataByte(0), bssByte(0) {
+
+				}
+			} EvalData;
+
+			int hex2int(std::string text) {
+				bool neg = false;
+				int ans = 0;
+
+				auto it = text.begin();
+				if (*it == '-') {
+					neg = true;
+					++it;
+				}
+				if (it != text.end()) ++it;
+				if (it != text.end()) ++it;
+				
+				for (it; it != text.end(); ++it) {
+					ans *= 10;
+					if ('0' <= *it && *it <= '9')
+						ans += *it - '0';
+					else if ('a' <= *it && *it <= 'f')
+						ans += *it - 'a' + 10;
+					else
+						ans += *it - 'A' + 10;
+				}
+				if (neg)
+					ans = -ans;
+				return ans;
+			}
+
+			int dec2int(std::string text) {
+				bool neg = false;
+				int ans = 0;
+
+				auto it = text.begin();
+				if (*it == '-') {
+					neg = true;
+					++it;
+				}
+				if (it != text.end() && *it == '0') ++it; 
+				if (it != text.end() && *it == 'd') ++it;
+
+				for (it; it != text.end(); ++it) {
+					ans *= 16;
+					if ('0' <= *it && *it <= '9')
+						ans += *it - '0';
+				}
+				if (neg)
+					ans = -ans;
+				return ans;
+			}
+
+			int oct2int(std::string text) {
+				bool neg = false;
+				int ans = 0;
+
+				auto it = text.begin();
+				if (*it == '-') {
+					neg = true;
+					++it;
+				}
+				if (it != text.end()) ++it;
+				if (it != text.end()) ++it;
+
+				for (it; it != text.end(); ++it) {
+					ans *= 8;
+					if ('0' <= *it && *it <= '7')
+						ans += *it - '0';
+				}
+				if (neg)
+					ans = -ans;
+				return ans;
+			}
+
+			int bin2int(std::string text) {
+				bool neg = false;
+				int ans = 0;
+
+				auto it = text.begin();
+				if (*it == '-') {
+					neg = true;
+					++it;
+				}
+				if (it != text.end()) ++it;
+				if (it != text.end()) ++it;
+
+				for (it; it != text.end(); ++it) {
+					ans *= 2;
+					if ('0' <= *it && *it <= '1')
+						ans += *it - '0';
+				}
+				if (neg)
+					ans = -ans;
+				return ans;
+			}
+
+			int pow(int base, u32 power) {
+				int ans = 1;
+				for (u32 i = 0; i < power; i++)
+					ans *= base;
+				return ans;
+			}
+
+			std::map<std::string, u32> instructionBase = {
+				{ "add", 0x0 },
+				{ "addc", 0x1 },
+				{ "addi", 0x2 },
+				{ "sub", 0x3 },
+				{ "subc", 0x4 },
+				{ "subi", 0x5 },
+				{ "bxr", 0x6 },
+				{ "bxri", 0x7 },
+				{ "bor", 0x8 },
+				{ "bori", 0x9 },
+				{ "bnd", 0xA },
+				{ "bndi", 0xB },
+				{ "shiftl", 0xC },
+				{ "shiftlc", 0xD },
+				{ "shiftli", 0xE },
+				{ "shiftr", 0xF },
+				{ "shiftrc", 0x10 },
+				{ "shiftri", 0x11 },
+				{ "rbr", 0x12 },
+				{ "abr", 0x13 },
+				{ "irbr", 0x14 },
+				{ "iabr", 0x15 },
+				{ "cmp", 0x16 },
+				{ "test", 0x17 },
+				{ "mov", 0x18 },
+				{ "set", 0x19 },
+				{ "push", 0x1A },
+				{ "pop", 0x1B },
+				{ "rbr", 0x1C },
+				{ "abr", 0x1D },
+				{ "irbr", 0x1E },
+				{ "iabr", 0x1F },
+				{ "ld", 0x20 },
+				{ "st", 0x4D },
+				{ "jmp", 0x60 },
+				{ "call", 0x68 },
+				{ "ret", 0x69 },
+				{ "nop", 0x6A },
+				{ "halt", 0x6B }
+			};
+
+			std::map<std::string, u32> regBase{
+				{ "reg", 0x0 },
+				{ "gen", 0x0 },
+				{ "sbp", 0x19 },
+				{ "zero", 0x1A },
+				{ "one", 0x1B },
+				{ "full", 0x1C },
+				{ "pc", 0x1D },
+				{ "stack", 0x1E },
+				{ "flag", 0x1F },
+
+				{ "_32B_", 0 },
+				{ "_16L_", 1 },
+				{ "_8L_", 2 },
+				{ "_8H_", 3 },
+				{ "_16H_", 4 },
+				{ "_S16L_", 5 },
+				{ "_S8L_", 6 },
+				{ "_S8H_", 7 }
+			};
+
+			std::map<std::string, u32> flagBase {
+				{ "zero", 0 },
+				{ "neg", 1 },
+				{ "pos", 2 },
+				{ "carry", 3 },
+				{ "carry4", 4 },
+				{ "overflow", 5 },
+				{ "one", 6 },
+				{ "gen", 7 },
+			};
+
+			bool preprocessAndConst(AST* cur, void* vpData) {
+				EvalData* data = (EvalData*)vpData;
+
+				for (auto it = cur->child.begin(); it != cur->child.end(); ++it) {
+					if ((*it)->type == (u64)TokenType::identifier) {
+						auto find = data->defineTable.find((*it)->text);
+						if (find != data->defineTable.end())
+							*it = data->defineTable[(*it)->text];
+					}
+				}
+
+				bool child1exp = (cur->child.size() >= 1) ? data->expressionValue.find(cur->child[0]) != data->expressionValue.end() : false;
+				bool child2exp = (cur->child.size() >= 2) ? data->expressionValue.find(cur->child[1]) != data->expressionValue.end() : false;
+
+				switch (cur->type) {
+				case (u64)ASTNodeType::define + (u64)TokenType::__end:
+					data->defineTable[cur->text] = cur->child[0];
+					break;
+
+				case (u64)TokenType::verticalbar: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] | data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::caret: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] ^ data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::ampersend: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] & data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::plus: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] + data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::minus: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] - data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::star: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::slash: if ( child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::dstar: if ( child1exp && child2exp) { data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); } break;
+				case (u64)TokenType::tilde: if ( child1exp ) { data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; } break;
+
+				case (u64)TokenType::hexnum: data->expressionValue[cur] = hex2int(cur->text); break;
+				case (u64)TokenType::decnum: data->expressionValue[cur] = dec2int(cur->text); break;
+				case (u64)TokenType::octnum: data->expressionValue[cur] = oct2int(cur->text); break;
+				case (u64)TokenType::binnum: data->expressionValue[cur] = bin2int(cur->text); break;
+				}
+
+				return true;
+			}
+
+			bool calculateSize(AST* cur, void* vpData) {
+				EvalData* data = (EvalData*)vpData;
+
+				switch (cur->type) {
+				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_R + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_RI + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_RR + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_II + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_IRI + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
+					data->textByte += 4;
+					break;
+
+				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
+					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
+						return false;
+					data->dataByte += data->expressionValue[cur->child[0]];
+					break;
+				}
+
+				return true;
+			}
+
+			bool calculateLabel(AST* cur, void* vpData) {
+				EvalData* data = (EvalData*)vpData;
+
+				switch (cur->type) {
+
+				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_R + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_RI + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_RR + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_II + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_IRI + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
+				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
+					data->textByte += 4;
+					break;
+
+				case (u64)ASTNodeType::label_text + (u64)TokenType::__end:
+					data->idenifierValue[cur->text] = data->textByte;
+					break;
+
+				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
+					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
+						return false;
+					data->dataByte += data->expressionValue[cur->child[0]];
+					break;
+
+				case (u64)ASTNodeType::label_data + (u64)TokenType::__end:
+					data->idenifierValue[cur->text] = data->dataByte;
+					break;
+				}
+
+				return true;
+			}
+
+			bool calculateNonconst(AST* cur, void* vpData) {
+				EvalData* data = (EvalData*)vpData;
+
+				switch (cur->type) {
+				case (u64)ASTNodeType::index + (u64)TokenType::__end:
+					if ((s32)data->expressionValue[cur->child[0]] < 0)
+						return false;
+					data->expressionValue[cur] = data->expressionValue[cur->child[0]];
+					break;
+
+				case (u64)TokenType::verticalbar: data->expressionValue[cur] = data->expressionValue[cur->child[0]] | data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::caret: data->expressionValue[cur] = data->expressionValue[cur->child[0]] ^ data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::ampersend: data->expressionValue[cur] = data->expressionValue[cur->child[0]] & data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::plus: data->expressionValue[cur] = data->expressionValue[cur->child[0]] + data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::minus: data->expressionValue[cur] = data->expressionValue[cur->child[0]] - data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::star: data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::slash: data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::dstar: data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); break;
+				case (u64)TokenType::tilde: data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; break;
+
+				case (u64)TokenType::identifier: 
+					if (data->idenifierValue.find(cur->text) == data->idenifierValue.end())
+						return false;
+					data->expressionValue[cur] = data->idenifierValue[cur->text]; 
+					break;
+				}
+
+				return true;
+			}
+
+			bool evaluateCode(AST* cur, void* vpData) {
+				EvalData* data = (EvalData*)vpData;
+
+				switch (cur->type) {
+
+				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
+					if (data->expressionValue.find(cur->child[1]) == data->expressionValue.end())
+						return false;
+					data->dataValue[cur] = data->expressionValue[cur->child[1]];
+					data->dataSection.push_back(data->dataValue[cur]);
+					break;
+
+				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_R + (u64)TokenType::__end:
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_RI + (u64)TokenType::__end:
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_RR + (u64)TokenType::__end:
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_II + (u64)TokenType::__end:
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_IRI + (u64)TokenType::__end:
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8) + (data->instructionValue[cur->child[2]]);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
+					data->instructionValue[cur] = ((instructionBase[cur->text] + regBase[cur->child[0]->text]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
+					data->instructionValue[cur] = ((instructionBase[cur->text] + flagBase[cur->child[0]->text]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
+					data->textSection.push_back(data->instructionValue[cur]);
+					break;
+
+				case (u64)ASTNodeType::reg + (u64)TokenType::__end:
+					data->instructionValue[cur] = (data->instructionValue[cur->child[0]] << 3) + data->instructionValue[cur->child[1]]; 
+					break;
+				case (u64)ASTNodeType::regid + (u64)TokenType::__end:
+					data->instructionValue[cur] = regBase[cur->text]; 
+					break;
+				case (u64)ASTNodeType::reg_index + (u64)TokenType::__end:
+					data->instructionValue[cur] = regBase[cur->text] + data->expressionValue[cur->child[0]];  
+					break;
+				case (u64)ASTNodeType::regmode + (u64)TokenType::__end:
+					data->instructionValue[cur] = regBase[cur->text];  
+					break;
+
+				case (u64)ASTNodeType::immidate16 + (u64)TokenType::__end:
+					data->instructionValue[cur] = data->expressionValue[cur->child[0]] & 0xFFFF;
+					break;
+				case (u64)ASTNodeType::immidate8 + (u64)TokenType::__end:
+					data->instructionValue[cur] = data->expressionValue[cur->child[0]] & 0xFF;
+					break;
+				}
+
+				return true;
+			}
+		}
+
+		Evaluator evaluator;
+
+		inline void setTree(AST* tree) {
+			evaluator.setTree(tree);
+		}
+
+		inline bool evaluate(functions::EvalData& data) {
+			data.textByte = 0;
+			data.dataByte = 0;
+			data.bssByte = 0;
+
+			if (!evaluator.evaluate(functions::preprocessAndConst, &data)) return false;
+			if (!evaluator.evaluate(functions::calculateSize, &data)) return false;
+
+			data.bssByte = data.dataByte + data.textByte - 1;
+			data.dataByte = data.textByte;
+			data.textByte = 0;
+
+			if (!evaluator.evaluate(functions::calculateLabel, &data)) return false;
+			if (!evaluator.evaluate(functions::calculateNonconst, &data)) return false;
+			if (!evaluator.evaluate(functions::evaluateCode, &data)) return false;
+
+			data.rawData.insert(data.rawData.end(), data.textSection.begin(), data.textSection.end());
+			data.rawData.insert(data.rawData.end(), data.dataSection.begin(), data.dataSection.end());
+
+			return true;
+		}
 	}
 
 	namespace iosystem {
+		using u32 = unsigned __int32;
 
+		bool writeBinaryFile(const string& filename, evaluator::functions::EvalData& data, bool bigEndian) {
+			ofstream fout;
+			fout.open("output.txt", ios::out | ios::binary);
+			if (!fout.is_open())
+				return false;
+
+			for (auto it = data.rawData.begin(); it != data.rawData.end(); ++it) {
+				union {
+					u32 data32;
+					char dataByte[4];
+				} conv;
+
+				conv.data32 = *it;
+
+				if (bigEndian) {
+					fout.write(&conv.dataByte[0], sizeof(char));
+					fout.write(&conv.dataByte[1], sizeof(char));
+					fout.write(&conv.dataByte[2], sizeof(char));
+					fout.write(&conv.dataByte[3], sizeof(char));
+				}
+				else {
+					fout.write(&conv.dataByte[3], sizeof(char));
+					fout.write(&conv.dataByte[2], sizeof(char));
+					fout.write(&conv.dataByte[1], sizeof(char));
+					fout.write(&conv.dataByte[0], sizeof(char));
+				}
+			}
+
+			fout.close();
+			return true;
+		}
 	}
 }
 
 using namespace assembler;
 using namespace assembler::lexer;
 using namespace assembler::parser;
+using namespace assembler::evaluator;
 
 void printTree(Tree* pTree, std::vector<vector<vector<Tree*>>>& out, std::vector<int>& tmp, int level, int div) {
 	if (!pTree)
@@ -635,12 +1243,21 @@ int main(int argc, char* argv[]) {
 	lexer::createLexer();
 	parser::createParser();
 
+	if (argc < 3) {
+		std::cout << "usage: assembler <input file> <output file>" << std::endl;
+		return -1;
+	}
+
+	const char* inputFile = argv[1];
+	const char* outputFile = argv[2];
+
 	ifstream file;
-	file.open(argv[1]);
+	file.open(inputFile);
 
 	std::cout << argc << std::endl;
 	std::cout << argv[0] << std::endl;
 	std::cout << argv[1] << std::endl;
+	std::cout << argv[2] << std::endl;
 
 	if (!file.is_open() || !file.good())
 		return -1;
@@ -651,9 +1268,6 @@ int main(int argc, char* argv[]) {
 		buff.push_back(c);
 	}
 	file.close();
-
-	if (buff.back() != '\n')
-		buff.push_back('\n');
 
 	cout << "file->" << endl;
 	cout << "------------------------------------------------------------" << endl;
@@ -711,10 +1325,11 @@ int main(int argc, char* argv[]) {
 
 	AST* pAST;
 	std::vector<unsigned long long> parseVec;
-	bool validParse = parser::parser.parse(pAST, parseVec, tokens);
+	bool validParse = parser::parser.parse(pAST, tokens);
 	cout << "parse->" << endl;
 	cout << "------------------------------------------------------------" << endl;
 	cout << (validParse ? "success" : "failed") << endl;
+	/*
 	cout << "------------------------------------------------------------" << endl;
 	for (auto it = parseVec.begin(); it != parseVec.end(); it++) {
 		cout << (int)(*it) << ": ";
@@ -723,7 +1338,7 @@ int main(int argc, char* argv[]) {
 		for (auto si = tmp.second.begin(); si != tmp.second.end(); si++)
 			cout << ((si->symbol.getRaw().first == ElementWrapper::Type::TERMINAL) ? lexer::tokenStr[(TokenType)si->symbol.getRaw().second] : parser::nonterminalStr[(NonterminalType)si->symbol.getRaw().second]) << ", ";
 		cout << endl;
-	}
+	}*/
 	cout << "------------------------------------------------------------" << endl;
 
 	std::map<int, std::vector<AST*>> levelMap;
@@ -746,8 +1361,28 @@ int main(int argc, char* argv[]) {
 		prevLevel = it->first;
 	}
 	cout << endl;
+	
+	evaluator::functions::EvalData data;
+	evaluator::setTree(pAST);
+	bool validEvaluate = evaluator::evaluate(data);
+
+	cout << "evaluate->" << endl;
+	cout << "------------------------------------------------------------" << endl;
+	cout << (validEvaluate ? "success" : "failed") << endl;
+	cout << "------------------------------------------------------------" << endl;
 
 	parser::parser.delAST(pAST);
+
+	cout << "text section" << endl;
+	for (auto it = data.textSection.begin(); it != data.textSection.end(); ++it) {
+		printf("0x%08X\n", *it);
+	}
+	cout << "data section" << endl;
+	for (auto it = data.dataSection.begin(); it != data.dataSection.end(); ++it) {
+		printf("0x%08X\n", *it);
+	}
+
+	iosystem::writeBinaryFile(outputFile, data, true);
 
 	return 0;
 }

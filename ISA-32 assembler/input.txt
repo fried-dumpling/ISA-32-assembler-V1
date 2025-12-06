@@ -1,2 +1,13 @@
+#define A_value 3
+#define B_value 5
+
+.data
+	A: 4 A_value	; int A = A_value
+	B: 4 B_value	; int B = 5
+	C: 4 0	; int C = 0
+
 .text
-	set %gen[0].32B 64 * 5 + 31
+	ld.zero %gen[0].32B A	; gen[0] = ram[A]
+	ld.zero %gen[1].32B B	; gen[1] = ram[B]
+	add %gen[0].32B %gen[1].32B	; gen[0] += gen[1]
+	st.zero %gen[0].32B C	; ram[C] = gen[0]

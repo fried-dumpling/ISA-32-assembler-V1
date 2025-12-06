@@ -920,22 +920,23 @@ namespace parser_generator {
 		} ASTNode;
 
 		void delAST(ASTNode* pAST) {
-			std::vector<ASTNode*> pASTvec;
+			std::unordered_set<ASTNode*> pASTvec;
 
 			std::queue<ASTNode*> searchQ;
 			searchQ.push(pAST);
 			while (!searchQ.empty()) {
 				ASTNode* cur = searchQ.front(); searchQ.pop();
-				pASTvec.push_back(cur);
+				pASTvec.insert(cur);
 				for (auto it = cur->child.begin(); it != cur->child.end(); ++it)
 					searchQ.push(*it);
 			}
 
-			for (auto it = pASTvec.rbegin(); it != pASTvec.rend(); ++it)
+			for (auto it = pASTvec.begin(); it != pASTvec.end(); ++it) {
 				delete (*it);
+			}
 		}
 
-		bool parse(ASTNode*& pAST, std::vector<ID>& parseList, std::vector<Token> inputs) {
+		bool parse(ASTNode*& pAST, std::vector<Token> inputs) {
 			inputs.push_back({ "", Terminal::__eot});
 
 			typedef struct _StackData {
@@ -960,7 +961,7 @@ namespace parser_generator {
 						++it;
 						break;
 					case AT::Reduce: {
-						parseList.push_back(action.arg);
+						//parseList.push_back(action.arg);
 						auto& grammer = this->grammerVec[action.arg];
 						auto& ASTRule = this->ASTActionVec[action.arg];
 
