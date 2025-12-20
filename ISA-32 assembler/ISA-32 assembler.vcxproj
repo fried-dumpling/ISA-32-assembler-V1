@@ -130,7 +130,9 @@
     <Text Include="output.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="assembler.hpp" />
     <ClInclude Include="evaluator.hpp" />
+    <ClInclude Include="iotool.hpp" />
     <ClInclude Include="lexer.hpp" />
     <ClInclude Include="parser.hpp" />
   </ItemGroup>

@@ -1,8 +1,6 @@
 #ifndef DPICP_EVALUATOR
 #define DPICP_EVALUATOR
 
-#include <iostream>
-
 #include <string>
 #include <vector>
 

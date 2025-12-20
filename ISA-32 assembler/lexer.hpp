@@ -1355,7 +1355,7 @@ namespace lexer_generator {
 			}
 		} Token;
 
-		void lex(std::vector<Token>& tokens, std::string& text) {
+		void lex(std::vector<Token>& tokens, std::string text) {
 			text.push_back(0);
 
 			typedef struct _TokenData {
