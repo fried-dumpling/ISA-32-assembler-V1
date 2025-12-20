@@ -17,6 +17,8 @@
 
 #include <utility>
 
+#include "lexer.hpp"
+
 #define NTSTART(name) enum class name { __accept, 
 #define NTEND() __end }
 
@@ -153,13 +155,7 @@ namespace parser_generator {
 			closureVec.push_back(startClosure);
 			visited[startClosure] = closureId++;
 
-			/*
-			for (auto it = startClosure.begin(); it != startClosure.end(); ++it) {
-				static size_t itemIndex = 0;
-				if (it->prodId == startItem.prodId)
-					startItemIds.push_back({ 0, itemIndex });
-				itemIndex++;
-			}*/
+			
 
 			while (!setQ.empty()) {
 				QData cur = setQ.front(); setQ.pop();
@@ -481,15 +477,6 @@ namespace parser_generator {
 				}
 			}
 
-			/*
-			std::map<std::pair<ID, ID>, std::pair<ID, ID>> ORRef;
-			for (auto it = rRefMap.begin(); it != rRefMap.end(); ++it)
-				ORRef.insert({ { it->first.closureId, it->first.itemId }, { it->second.closureId, it->second.itemId } });
-
-			std::cout << "rRefMap" << std::endl;
-			for (auto it = ORRef.begin(); it != ORRef.end(); ++it)
-				std::cout << "  " << it->first.first << ", " << it->first.second << " -> " << it->second.first << ", " << it->second.second << std::endl;*/
-
 			for (auto it = startItems.begin(); it != startItems.end(); ++it) {
 				lookaheadTable[it->first][it->second].ref.clear();
 				std::vector<u64>& startLook = lookaheadTable[it->first][it->second].lookaheadSet;
@@ -507,16 +494,6 @@ namespace parser_generator {
 					return (left.closureId < right.closureId || (left.closureId == right.closureId && left.itemId < right.itemId));
 				}
 			} DIDC;
-
-			/*
-			std::map<DoubleID, DoubleID, DIDC> sccOM;
-			for (auto it = sccMap.begin(); it != sccMap.end(); ++it)
-				sccOM.insert({ it->first, it->second });
-
-			std::cout << "SCC Map:" << std::endl;
-			for (auto it = sccOM.begin(); it != sccOM.end(); ++it) {
-				std::cout << "  " << it->first.closureId << ", " << it->first.itemId << " -> " << it->second.closureId << ", " << it->second.itemId << std::endl;
-			}*/
 
 			for (auto it = rRefMap.begin(); it != rRefMap.end(); ++it) {
 				DoubleID first = replaceScc(it->first, sccMap), second = replaceScc(it->second, sccMap);
@@ -620,17 +597,7 @@ namespace parser_generator {
 		void createTable(ParserTable& table, std::vector<std::pair<Element, std::vector<Element>>>& grammerVec, Element terminalEnd, Element nonterminalEnd, Element acceptNonterminal) {
 			acceptNonterminal += terminalEnd;
 
-			/*
-			std::cout << "grammerVec:" << std::endl;
-			for (auto it = grammerVec.begin(); it != grammerVec.end(); ++it) {
-				static size_t k = 0;
-				std::cout << "  " << k++ << ": " << it->first << " -> ";
-				for (auto si = it->second.begin(); si != it->second.end(); ++si)
-					std::cout << *si << ", ";
-				std::cout << std::endl;
-			}*/
-
-			Item startItem;
+			Item startItem = {};
 			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>> grammerMap;
 			u64 count = 0;
 			for (auto it = grammerVec.begin(); it != grammerVec.end(); ++it) {
@@ -640,99 +607,18 @@ namespace parser_generator {
 				count++;
 			}
 
-			/*
-			std::cout << "startItem:" << std::endl;
-			std::cout << "  prod: " << startItem.prodId << ", dot: " << startItem.dotPos << ", look: " << (int)startItem.lookaheadId << std::endl;
-			std::cout << "grammerMap:" << std::endl;
-			for (auto it = grammerMap.begin(); it != grammerMap.end(); ++it) {
-				std::cout << "  " << it->first << " -> ";
-				for (auto si = it->second.first.begin(); si != it->second.first.end(); ++si)
-					std::cout << *si << ", ";
-				std::cout << "(id: " << it->second.second << ")" << std::endl;
-			}*/
-
 			std::unordered_map<ID, std::unordered_set<ID>> reduceItem;
 			std::vector<std::pair<ID, ID>> startItemIds;
 			std::vector<std::vector<Item>> closureVec;
 			std::unordered_multimap<ID, std::pair<ID, Element>> transitionMap;
 			createC0(reduceItem, startItemIds, closureVec, transitionMap, grammerVec, grammerMap, startItem);
 
-			/*
-			std::cout << "reduceItem:" << std::endl;
-			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
-				for (auto si = it->second.begin(); si != it->second.end(); ++si)
-					std::cout << "  " << it->first << ", " << *si << std::endl;
-			}
-			std::cout << "closureVec:" << std::endl;
-			for (size_t i = 0; i < closureVec.size(); i++) {
-				std::cout << "  state " << i << ":" << std::endl;
-
-				for (size_t j = 0; j < closureVec[i].size(); j++) {
-					Item& item = closureVec[i][j];
-					std::cout << "    prod: " << item.prodId << ", dot: " << item.dotPos << ", look: " << (int)item.lookaheadId << std::endl;
-				}
-			}
-				std::cout << std::endl;
-			std::cout << "transitionMap:" << std::endl;
-			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it)
-				std::cout << "  from: " << it->first << ", to: " << it->second.first << ", via: " << it->second.second << std::endl;*/
-
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>> revTransitionMap;
 			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it)
 				revTransitionMap[it->second.second].insert({ it->second.first, it->first });
 
-			/*
-			std::cout << "revTransitionMap:" << std::endl;
-			for (auto it = revTransitionMap.begin(); it != revTransitionMap.end(); ++it) {
-				std::cout << "  via: " << it->first << std::endl;
-				for (auto si = it->second.begin(); si != it->second.end(); ++si)
-					std::cout << "    to: " << si->first << ", from: " << si->second << std::endl;
-			}*/
-
 			std::vector<std::vector<u64>> lookaheadSets;
 			getLookahead(lookaheadSets, closureVec, reduceItem, startItemIds, revTransitionMap, grammerVec, grammerMap, terminalEnd, terminalEnd - 1);
-
-			/*
-			std::cout << "closureVec:" << std::endl;
-			for (size_t i = 0; i < closureVec.size(); i++) {
-				std::cout << "  state " << i << ":" << std::endl;
-
-
-				for (size_t j = 0; j < closureVec[i].size(); j++) {
-					Item& item = closureVec[i][j];
-					std::cout << "    item" << j;
-					std::cout << ": rule: ";
-					std::cout << grammerVec[item.prodId].first << " -> ";
-					size_t index = 0;
-
-					if (!item.dotPos)
-						std::cout << ".";
-					for (auto si = grammerVec[item.prodId].second.begin(); si != grammerVec[item.prodId].second.end(); ++si) {
-						std::cout << *si;
-						index++;
-						if (index == item.dotPos)
-							std::cout << ".";
-						else
-							std::cout << " ";
-					}
-					std::cout << ", dot: " << item.dotPos << ", look: " << (int)item.lookaheadId << std::endl;
-				}
-			}
-
-			std::cout << "lookaheadSets:" << std::endl;
-			for (auto it = lookaheadSets.begin(); it != lookaheadSets.end(); ++it) {
-				static size_t k = 0;
-				std::cout << "  set" << k++ << ": ";
-				for (u64 i = 0; i < it->size(); i++) {
-					u64 bit = (*it)[i];
-					for (u64 j = 0; j < 64 && bit; j++) {
-						if (bit & 0b1)
-							std::cout << (i * 64 + j) << ", ";
-						bit >>= 1;
-					}
-				}
-				std::cout << std::endl;
-			}*/
 
 			size_t stateSize = closureVec.size(), actionSize = terminalEnd, gotoSize = nonterminalEnd;
 			table.actionTable = new Action*[stateSize];
@@ -762,8 +648,6 @@ namespace parser_generator {
 					table.gotoTable[it->first][it->second.second - terminalEnd] = { it->second.first, false };
 			}
 
-			/*std::cout << "SRR conflict:" << std::endl;*/
-
 			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
 				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
 					Item& item = closureVec[it->first][*si];
@@ -775,24 +659,13 @@ namespace parser_generator {
 					for (u64 i = 0; i < lookahead.size(); i++) {
 						u64 bit = lookahead[i];
 						for (u64 j = 0; j < 64 && bit; j++) {
-							if (bit & 0b1) {
-								/*
-								if (it->first >= table.size)
-									std::cout << "tableSize error" << std::endl;
-								if (i * 64 + j >= table.actionSize)
-									std::cout << "actionSize error" << std::endl;
-								if (!handledReduce.insert({ { it->first, i * 64 + j }, (int)item.prodId }).second)
-									std::cout << "  state" << it->first << ", " << (i * 64 + j) << ", item " << item.prodId << ", prev" << handledReduce[{it->first, i * 64 + j}] << std::endl;*/
-
+							if (bit & 0b1)
 								table.actionTable[it->first][i * 64 + j] = { item.prodId, type };
-							}
 							bit >>= 1;
 						}
 					}
 				}
 			}
-
-			/*printTable(table, 3);*/
 		}
 
 		std::string int2str(int num, int len) {
@@ -862,73 +735,174 @@ namespace parser_generator {
 		}
 	}
 
-	template <typename Terminal, typename NonTerminal>
+	typedef struct _PTNode {
+		using Element = convert::Element;
+
+		Element data;
+		std::string text;
+		struct _PTNode* parent;
+		std::vector<struct _PTNode*> child;
+	} PTNode;
+
+	void delPT(PTNode* pPT) {
+		std::vector<PTNode*> pPTvec;
+
+		std::queue<PTNode*> searchQ;
+		searchQ.push(pPT);
+
+		while (!searchQ.empty()) {
+			PTNode* cur = searchQ.front(); searchQ.pop();
+			pPTvec.push_back(cur);
+			for (auto it = cur->child.begin(); it != cur->child.end(); ++it)
+				searchQ.push(*it);
+		}
+
+		for (auto it= pPTvec.rbegin(); it != pPTvec.rend(); ++it)
+			delete (*it);
+	}
+
+	template <typename Terminal, typename NonTerminal, typename ASTElement>
 	class ParserFactory;
 
-	template <typename Terminal, typename NonTerminal>
+	template <typename Terminal, typename NonTerminal, typename ASTElement>
 	class Parser {
 	private:
-		friend ParserFactory<Terminal, NonTerminal>;
+		friend ParserFactory<Terminal, NonTerminal, ASTElement>;
 
 		using u64 = unsigned __int64;
 		using ID = convert::ID;
 		using Element = convert::Element;
 		using Table = convert::ParserTable;
 
-		std::vector<std::pair<u64, std::vector<u64>>> grammerVec;
+		std::vector<std::pair<Element, std::vector<Element>>> grammerVec;
+		std::vector<std::pair<std::pair<Element, int>, std::vector<std::pair<bool, bool>>>> ASTActionVec;
 		Table table;
 
 	public:
-		bool parse(std::vector<ID>& parseList, std::vector<Terminal>& inputs) {
-			inputs.push_back(Terminal::__eot);
+		using Token = typename lexer_generator::Lexer<Terminal>::Token;
+
+		typedef struct _ASTNode {
+			Element type;
+			std::string text;
+			std::vector<struct _ASTNode*> child;
+
+			_ASTNode(void) : type(0), text(""), child({}) {}
+			_ASTNode(const Element& type, const std::string& text, const std::vector<struct _ASTNode*>& child) : type(type), text(text), child(child) {}
+		} ASTNode;
+
+		void delAST(ASTNode* pAST) {
+			std::unordered_set<ASTNode*> pASTvec;
+
+			std::queue<ASTNode*> searchQ;
+			searchQ.push(pAST);
+			while (!searchQ.empty()) {
+				ASTNode* cur = searchQ.front(); searchQ.pop();
+				pASTvec.insert(cur);
+				for (auto it = cur->child.begin(); it != cur->child.end(); ++it)
+					searchQ.push(*it);
+			}
+
+			for (auto it = pASTvec.begin(); it != pASTvec.end(); ++it) {
+				delete (*it);
+			}
+		}
+
+		bool parse(ASTNode*& pAST, std::vector<Token> inputs) {
+			inputs.push_back({ "", Terminal::__eot});
 
 			typedef struct _StackData {
 				Element symbol;
 				ID state;
 			} StackData;
 
+			std::stack<ASTNode*> astStack;
 			std::stack<StackData> stack;
 			stack.push({ (Element)0 , 0 });
 
+			u64 tokenCount = 0;
 			for (auto it = inputs.begin(); it != inputs.end();) {
 				ID state = stack.top().state;
 
 				using AT = convert::ActionType;
 
-				auto action = this->table.actionTable[state][(Element)(*it)];
+				auto action = this->table.actionTable[state][(Element)(it->type)];
 				switch (action.type) {
 					case AT::Shift:
-						stack.push({ (Element)(*it), action.arg });
-						/*std::cout << "Shift" << action.arg << " " << (int)(*it) << std::endl;*/
+						stack.push({ (Element)(it->type), action.arg });
+						astStack.push(new ASTNode( (Element)it->type, it->text, {} ));
 						++it;
+						tokenCount++;
 						break;
 					case AT::Reduce: {
-						parseList.push_back(action.arg);
-						/*std::cout << "Reduce" << action.arg << std::endl;*/
-						auto grammer = this->grammerVec[action.arg];
-						for (size_t i = 0; i < grammer.second.size(); i++)
+						//parseList.push_back(action.arg);
+						auto& grammer = this->grammerVec[action.arg];
+						auto& ASTRule = this->ASTActionVec[action.arg];
+
+						ASTNode* nNode = new ASTNode;
+						nNode->text = "";
+
+						for (size_t i = grammer.second.size() - 1; true; i--) {
 							stack.pop();
+							ASTNode* cur = astStack.top(); astStack.pop();
+
+							if (i == ASTRule.first.second) {
+								nNode->text = cur->text;
+								nNode->type = cur->type;
+							}
+
+							if (ASTRule.second[i].first) {
+								if (ASTRule.second[i].second) {
+									nNode->child.insert(nNode->child.begin(), cur->child.begin(), cur->child.end());
+									delete cur;
+								}
+								else
+									nNode->child.insert(nNode->child.begin(), cur);
+							}
+							else
+								delAST(cur);
+
+							if (!i)
+								break;
+						}
+						if (ASTRule.first.first != -1)
+							nNode->type = ASTRule.first.first;
+						astStack.push(nNode);
+
 						auto goData = this->table.gotoTable[stack.top().state][((u64)grammer.first - (u64)Terminal::__end)];
 						if (goData.error)
-							return false;
+							goto error;
 						stack.push({ (Element)grammer.first, goData.state });
-						/*std::cout << "Goto" << goData.state << std::endl;*/
 					}
 						break;
 					case AT::Accept:
-						/*std::cout << "Accept" << std::endl;*/
-						return true;
+						goto accept;
 					case AT::Error:
-						/*std::cout << "Error at input " << (int)(*it) << std::endl;*/
-						return false;
+						goto error;
+					default:
+						goto error;
 				}
 			}
 
+		accept:
+			pAST = astStack.top();
 			return true;
+
+		error:
+			ASTNode* nNode = new ASTNode;
+			ASTNode* errNode = new ASTNode;
+			for (u64 i = 0; i < tokenCount; i++)
+				errNode->text += inputs[i].text + " ";
+			nNode->child.push_back(errNode);
+			while (!astStack.empty()) {
+				ASTNode* cur = astStack.top(); astStack.pop();
+				nNode->child.push_back(cur);
+			}
+			pAST = nNode;
+			return false;
 		}
 	};
 
-	template <typename Terminal, typename NonTerminal>
+	template <typename Terminal, typename NonTerminal, typename ASTElement>
 	class ParserFactory {
 	private:
 		using u64 = unsigned __int64;
@@ -938,43 +912,70 @@ namespace parser_generator {
 
 	public:
 		class ElementWrapper {
+		public:
+			enum class Type {
+				RAW,
+				TERMINAL,
+				NONTERMINAL,
+				ASTTYPE
+			};
+
 		private:
-			bool isTerminal;
+			Type type;
 			union {
 				Terminal terminal;
 				NonTerminal nonTerminal;
+				ASTElement astElement;
 				u64 raw;
 			};
 
 		public:
-			ElementWrapper(void) : isTerminal(true), terminal(Terminal(0)) {}
-			ElementWrapper(Terminal t) : isTerminal(true), terminal(t) {}
-			ElementWrapper(NonTerminal nt) : isTerminal(false), nonTerminal(nt) {}
+			ElementWrapper(void) : type(Type::RAW), terminal(Terminal(0)) {}
+			ElementWrapper(Terminal t) : type(Type::TERMINAL), terminal(t) {}
+			ElementWrapper(NonTerminal nt) : type(Type::NONTERMINAL), nonTerminal(nt) {}
+			ElementWrapper(ASTElement at) : type(Type::ASTTYPE), astElement(at) {}
 
 			const ElementWrapper& operator = (const ElementWrapper& other) {
-				this->isTerminal = other.isTerminal;
-				if (this->isTerminal)
-					this->terminal = other.terminal;
-				else
-					this->nonTerminal = other.nonTerminal;
+				this->type = other.type;
+				this->raw = other.raw;
 				return *this;
 			}
 
-			convert::Element get(void) const {
-				if (this->isTerminal)
+			inline convert::Element get(void) const {
+				switch (this->type) {
+				case Type::TERMINAL:
 					return (convert::Element)this->terminal;
-				return (convert::Element)this->nonTerminal + (convert::Element)Terminal::__end;
+				case Type::NONTERMINAL:
+					return (convert::Element)this->nonTerminal + (convert::Element)Terminal::__end;
+				case Type::ASTTYPE:
+					if ((Element)this->astElement == -1)
+						return -1;
+					return (convert::Element)this->astElement + (convert::Element)Terminal::__end;
+				}
+				return (convert::Element)this->raw;
 			}
 
-			std::pair<bool, u64> getRaw(void) const {
-				return { this->isTerminal, (u64)this->raw };
+			inline std::pair<Type, u64> getRaw(void) const {
+				return { this->type, (u64)this->raw };
 			}
 		};
 
-		using CreateData = std::vector<std::pair<ElementWrapper, std::vector<ElementWrapper>>>;
+		typedef struct _Head {
+			ElementWrapper symbol;
+			ElementWrapper nodeType;
+			int nodeIndex;
+		} Head;
+
+		typedef struct _Tail {
+			ElementWrapper symbol;
+			bool useNode, expand;
+		} Tail;
+
+		using CreateData = std::vector<std::pair<Head, std::vector<Tail>>>;
 
 	private:
 		std::vector<std::pair<Element, std::vector<Element>>> grammerVec;
+		std::vector<std::pair<std::pair<Element, int>, std::vector<std::pair<bool, bool>>>> ASTActionVec;
 		Table table;
 
 		void clearTable(void) {
@@ -1010,10 +1011,14 @@ namespace parser_generator {
 
 		void setRules(const CreateData& data) {
 			for (auto it = data.cbegin(); it != data.cend(); ++it) {
-				std::vector<u64> rhs;
-				for (auto si = it->second.cbegin(); si != it->second.cend(); ++si)
-					rhs.push_back(si->get());
-				grammerVec.push_back({ it->first.get(), rhs });
+				std::vector<Element> rhsG;
+				std::vector<std::pair<bool, bool>> rhsA;
+				for (auto si = it->second.cbegin(); si != it->second.cend(); ++si) {
+					rhsG.push_back(si->symbol.get());
+					rhsA.push_back({ si->useNode, si->expand });
+				}
+				grammerVec.push_back({ it->first.symbol.get(), rhsG });
+				ASTActionVec.push_back({ { it->first.nodeType.get(), it->first.nodeIndex }, rhsA });
 			}
 		}
 
@@ -1023,10 +1028,11 @@ namespace parser_generator {
 			convert::createTable(this->table, this->grammerVec, (Element)Terminal::__end, (Element)NonTerminal::__end, (Element)NonTerminal::__accept);
 		}
 
-		Parser<Terminal, NonTerminal> create(void) {
-			Parser<Terminal, NonTerminal> parser;
+		Parser<Terminal, NonTerminal, ASTElement> create(void) {
+			Parser<Terminal, NonTerminal, ASTElement> parser;
 			parser.table = this->table;
 			parser.grammerVec = this->grammerVec;
+			parser.ASTActionVec = this->ASTActionVec;
 			return parser;
 		}
 	};

@@ -23,12 +23,24 @@
     <Text Include="input.txt">
       <Filter>리소스 파일</Filter>
     </Text>
+    <Text Include="output.txt">
+      <Filter>리소스 파일</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="parser.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="evaluator.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="assembler.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="iotool.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

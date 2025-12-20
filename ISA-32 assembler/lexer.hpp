@@ -1346,12 +1346,18 @@ namespace lexer_generator {
 			std::string text;
 			TokenType type;
 
-			operator TokenType() const {
+			inline operator TokenType() const {
 				return this->type;
+			}
+
+			inline operator u64() const {
+				return (u64)this->type;
 			}
 		} Token;
 
-		void lex(std::vector<Token>& tokens, std::string& text) {
+		void lex(std::vector<Token>& tokens, std::string text) {
+			text.push_back(0);
+
 			typedef struct _TokenData {
 				TokenType type;
 				size_t len;
@@ -1363,10 +1369,16 @@ namespace lexer_generator {
 			std::string curString;
 			TokenData endPoint = { TokenType(-1), 0, text.begin(), 0 };
 			for (auto it = text.begin(); it != text.end(); ++it) {
-				curString.push_back(*it);
+				if (*it == 0)
+					goto createToken;
 
+				curString.push_back(*it);
 				state = this->dfaTable.table[state][*it];
+
 				if (state == (ID)-1) {
+				createToken:
+					if (!curString.size())
+						break;
 					if (endPoint.type != TokenType(-1))
 						curString.resize(endPoint.len);
 					else
@@ -1379,6 +1391,8 @@ namespace lexer_generator {
 
 					endPoint = { TokenType(-1), 0, it, 0 };
 					state = 0;
+
+					continue;
 				}
 				if (this->endMap.find(state) != this->endMap.end()) {
 					auto range = this->endMap.equal_range(state);
@@ -1388,12 +1402,6 @@ namespace lexer_generator {
 					}
 				}
 			}
-			if (endPoint.type != TokenType(-1))
-				curString.resize(endPoint.len);
-			else
-				endPoint = { TokenType(-1), 0, text.begin(), 0 };
-
-			tokens.push_back({ curString, endPoint.type });
 		}
 	};
 
