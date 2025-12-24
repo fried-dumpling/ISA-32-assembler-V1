@@ -30,7 +30,7 @@ namespace assembler {
 			rol, roli, ror, rori,
 			cmp, test,
 
-			mov, set,
+			mov, set, setz, sets,
 			push, pop,
 
 			ld, st,
@@ -111,6 +111,8 @@ namespace assembler {
 				{ "test", TokenType::test },
 				{ "mov", TokenType::mov },
 				{ "set", TokenType::set },
+				{ "setz", TokenType::setz },
+				{ "sets", TokenType::sets },
 				{ "push", TokenType::push },
 				{ "pop", TokenType::pop },
 				{ "ld", TokenType::ld },
@@ -219,6 +221,8 @@ namespace assembler {
 			{ TokenType::test, "test" },
 			{ TokenType::mov, "mov" },
 			{ TokenType::set, "set" },
+			{ TokenType::setz, "setz" },
+			{ TokenType::sets, "sets" },
 			{ TokenType::push, "push" },
 			{ TokenType::pop, "pop" },
 			{ TokenType::ld, "ld" },
@@ -635,6 +639,8 @@ namespace assembler {
 
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::setz, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::sets, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::push, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::pop, false, false }, {NT::reg, true, false } } },
@@ -910,8 +916,10 @@ namespace assembler {
 				{ "test", 0x17 },
 				{ "mov", 0x18 },
 				{ "set", 0x19 },
-				{ "pop", 0x1A },
-				{ "push", 0x1B },
+				{ "setz", 0x1A },
+				{ "sets", 0x1B },
+				{ "pop", 0x1E },
+				{ "push", 0x1F },
 				{ "ld", 0x20 },
 				{ "st", 0x40 },
 				{ "jmp", 0x60 },
