@@ -1,6 +1,6 @@
 # Description
-<div> __Custom assembler__ for **_DPI ISA-32_** architecture system of CPU, computer and OS. </div>
-<div> The cpu is </div>
+__Custom assembler__ for **_DPI ISA-32_** architecture system of CPU, computer and OS. <br>
+The cpu is
 
 # How to use
 Run this executable in cmd and pass in following arguement
@@ -18,9 +18,8 @@ Run this executable in cmd and pass in following arguement
 
 # Supporting feature
 ## Instruction
-<div> Currently supports only __ALU__, __register__, __stack__, __ram__ and __flow__ instruction. </div>
-
-<div> Instruction including __cache__, __MMU__, __interrupt__ or other __system__ and __kernel__ is **_not supported_**. </div>
+ Currently supports only __ALU__, __register__, __stack__, __ram__ and __flow__ instruction. <br>
+ Instruction including __cache__, __MMU__, __interrupt__ or other __system__ and __kernel__ is **_not supported_**. <br>
 
 ### Supported instructions
 ```
@@ -90,18 +89,23 @@ flag
 .S8H
 ```
 - Signed
-  - `.32B`: signed and unsigned 32 bits of the register. (because full width is 32bit, it doesn't care if it's signed or not)
+  - `.32B`: __signed or unsigned__ 32 bits of the register. (because full width is 32bit, it doesn't care if it's signed or not)
   - `.S16H`: signed high 16bits of the register.
   - `.S16L`: signed low 16bits of the register.
   - `.S8L`: signed low 8bits of the register.
   - `.S8H`: signed high 8bits of the register.
 - Unsigned
-  - `.32B`: signed and unsigned 32 bits of the register. (because full width is 32bit, it doesn't care if it's signed or not)
+  - `.32B`: __signed or unsigned__ 32 bits of the register. (because full width is 32bit, it doesn't care if it's signed or not)
   - `.16L`: unsigned low 16bits of the register.
   - `.8L`: unsigned low 8bits of the register.
   - `.8H`: unsigned high 8bits of the register.
-<div> __Register slicing diagram__ </div> 
 
+**_Note_**: <br> 
+Sign mode of a register doesn't matter when it's being __written__. <br> 
+The sign mode is only used to tell the CPU how to expand the register slice into __32bit__ (which is CPU's word size). <br> 
+Because of this, `.32B`(full width register mode) __doesn't have a different sign mode__. <br> 
+
+ __Register slicing diagram__
 ```
 |-------------------------|
 | 32B                     |
@@ -116,6 +120,7 @@ __Example Syntax__
 ```
 %gen[0].32B
 %pc.8H
+%flag.8L
 ```
 
 ## Flags
@@ -150,75 +155,127 @@ jmp.zero %pc.32B, 0
 ijmp.carry %pc.32B, 1
 jmp.one %pc.32B, 2
 ```
-<div> __Flag slicing diagram__ </div> 
 
+### Flag register explained
+ __Flag slicing diagram__
+ __full 32bit flag register__
 ```
 |-------------------------|
 | 32B                     |
 |-------------------------|
-| GP (24bit)       | flag |
+| GP (16b)  | sec2 | sec1 |
 |-------------------------|
+```
 
-flag:
+__sec1(aka. cond):__
+```
 |----------------------------------------------------------------------------------------|
 | gen      | one      | overflow | carry4   | carry    | pos      | neg      | zero      |
 |----------------------------------------------------------------------------------------|
 ```
 
+__sec2(aka. ctrl):__
+```
+|----------------------------------------------------------------------------------------|
+| trap     | int proc | GP (4bit)                                 | sc.ov    | pc.ov     |
+|----------------------------------------------------------------------------------------|
+```
+
+*GP stands for __general purpose__ <br>
+*sc.ov is stack overflow
+*pc.ov is program counter overflow
+
 ## Instruction syntax
 
-- `add <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` + `<src reg>`
-- `addc <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` + `<src reg>` with carry in
+### add
+increment `<dest reg>` by `<src reg>`
+#### syntax:
+`add <dest reg> <src reg>`
+#### example:
+`add %gen[0].32B, %gen[1].32B`
+
+### addc
+__syntax:__ <br>
+`addc <dest reg> <src reg>`: <br>
+__what is does:__ <br>
+increment `<dest reg>` by `<src reg>` with carry in <br>
+__example:__ <br>
+`add %gen[0].32B, %gen[1].32B`
+
 - `addi <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` + `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` + `<immidate>`  <br> <br>
 - `sub <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` - `<src reg>`
+  - `<dest reg>` = `<dest reg>` - `<src reg>`  <br> <br>
 - `subc <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` - `<src reg>` with carry in
+  - `<dest reg>` = `<dest reg>` - `<src reg>` with carry in  <br> <br>
 - `subi <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` - `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` - `<immidate>`  <br> <br>
 - `bxr <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` bitwise xor `<src reg>`
+  - `<dest reg>` = `<dest reg>` bitwise xor `<src reg>`  <br> <br>
 - `bxri <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` bitwise xor `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` bitwise xor `<immidate>`  <br> <br>
 - `bor <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` bitwise or `<src reg>`
+  - `<dest reg>` = `<dest reg>` bitwise or `<src reg>`  <br> <br>
 - `bori <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` bitwise or `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` bitwise or `<immidate>`  <br> <br>
 - `bnd <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`
+  - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`  <br> <br>
 - `bndi <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` bitwise and `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` bitwise and `<immidate>`  <br> <br>
 - `rol <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` roll left by `<src reg>`
+  - `<dest reg>` = `<dest reg>` roll left by `<src reg>`  <br> <br>
 - `roli <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` roll left by `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` roll left by `<immidate>`  <br> <br>
 - `ror <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` roll right by `<src reg>`
+  - `<dest reg>` = `<dest reg>` roll right by `<src reg>`  <br> <br>
 - `rori <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` roll right by `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` roll right by `<immidate>`  <br> <br>
 - `shiftl <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` shift left by `<src reg>`
+  - `<dest reg>` = `<dest reg>` shift left by `<src reg>`  <br> <br>
 - `shiftli <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` shift left by `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` shift left by `<immidate>`  <br> <br>
 - `shiftr <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` shift right by `<src reg>`
+  - `<dest reg>` = `<dest reg>` shift right by `<src reg>`  <br> <br>
 - `shiftri <dest reg> <immidate>`:
-  - `<dest reg>` = `<dest reg>` shift right by `<immidate>`
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = `<dest reg>` shift right by `<immidate>`  <br> <br>
 - `cmp <dest reg> <src reg>`:
   - result is only stored in flag
-  - `<dest reg>` - `<src reg>`
+  - `<dest reg>` - `<src reg>`  <br> <br>
 - `test <dest reg> <src reg>`:
   - result is only stored in flag
-  - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`
-
+  - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`  <br> <br>
+- `mov <dest reg> <src reg>`
+  - `<dest reg>` = `<dest reg>` <br> <br>
+- `set <dest reg> <immidate>`
+  - `<immidate>` is unsigned 16 bit
+- `setz <dest reg> <immidate>` <br> <br>
+  - `<immidate>` is unsigned 16 bit
+  - `<dest reg>` = expanded `<immidate>` <br> <br>
+- `sets <dest reg> <immidate>`
+  - `<immidate>` is signed 16 bit
+  - `<dest reg>` = expanded `<immidate>` <br> <br>
+- `pop <dest reg>`
+  - `<dest reg>` = stack's top data
+  - stack counter decrement <br> <br>
+- `push <src reg>`
+  - stack's top data = `<src reg>`
+  - stack counter increment <br> <br>
+- `ld . <base reg> <dest reg> <immidate>`
+  - `<immidate>` is signed 16 bit
+  - `<dest reg>` = data at address `<base reg>` + `<immidate>` <br> <br>
+- `st . <base reg> <dest reg> <immidate>`
+  - `<immidate>` is signed 16 bit
+  - data at address `<base reg>` + `<immidate>` = `<dest reg>` <br> <br>
 ```
-mov
-set
-setz
-sets
 pop
 push
 ld
@@ -233,8 +290,8 @@ halt
 
 
 ## Feature
-<div> Supports __define__, __data section allocation__, __cpu instruction__,  __label__, and __c-style multi line comment__ </div>
-<div> Everything else including __bss__, __macro__, etc.. is **_not supported_** </div>
+ Supports __define__, __data section allocation__, __cpu instruction__,  __label__, and __c-style multi line comment__ <br>
+ Everything else including __bss__, __macro__, etc.. is **_not supported_** <br>
 
 ## Supported function
 ### Define
