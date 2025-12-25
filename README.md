@@ -188,55 +188,139 @@ __sec2(aka. ctrl):__
 ## Instruction syntax
 
 ### add
-increment `<dest reg>` by `<src reg>`
-#### syntax:
-`add <dest reg> <src reg>`
-#### example:
-`add %gen[0].32B, %gen[1].32B`
-
-### addc
+increment `<dest reg>` by `<src reg>` <br>
 __syntax:__ <br>
-`addc <dest reg> <src reg>`: <br>
-__what is does:__ <br>
-increment `<dest reg>` by `<src reg>` with carry in <br>
+`'add' <dest reg> ',' <src reg>` <br>
 __example:__ <br>
 `add %gen[0].32B, %gen[1].32B`
 
-- `addi <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` + `<immidate>`  <br> <br>
-- `sub <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` - `<src reg>`  <br> <br>
-- `subc <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` - `<src reg>` with carry in  <br> <br>
-- `subi <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` - `<immidate>`  <br> <br>
-- `bxr <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` bitwise xor `<src reg>`  <br> <br>
-- `bxri <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` bitwise xor `<immidate>`  <br> <br>
-- `bor <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` bitwise or `<src reg>`  <br> <br>
-- `bori <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` bitwise or `<immidate>`  <br> <br>
-- `bnd <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`  <br> <br>
-- `bndi <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` bitwise and `<immidate>`  <br> <br>
-- `rol <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` roll left by `<src reg>`  <br> <br>
-- `roli <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` roll left by `<immidate>`  <br> <br>
-- `ror <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` roll right by `<src reg>`  <br> <br>
-- `rori <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` roll right by `<immidate>`  <br> <br>
+### addc
+increment `<dest reg>` by `<src reg>` with carry in <br>
+__syntax:__ <br>
+`'addc' <dest reg> ',' <src reg>` <br>
+__example:__ <br>
+`addc %gen[0].32B, %gen[1].32B`
+
+### addi
+increment `<dest reg>` by `<immidate>` <br>
+`<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'addi' <dest reg> ',' <immidate>` <br>
+__example:__ <br>
+`addi %gen[0].32B, 0x1234`
+
+### sub
+decrement `<dest reg>` by `<src reg>` <br>
+__syntax:__ <br>
+`'sub' <dest reg> ',' <src reg>` <br>
+__example:__ <br>
+`sub %gen[0].32B, %gen[1].32B`
+
+### subc
+decrement `<dest reg>` by `<src reg>` with carry in <br>
+__syntax:__ <br>
+`'subc' <dest reg> ',' <src reg>` <br>
+__example:__ <br>
+`subc %gen[0].32B, %gen[1].32B`
+
+### subi
+decrement `<dest reg>` by `<immidate>` <br>
+`<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'subi' <dest reg> ',' <immidate>` <br>
+__example:__ <br>
+`subi %gen[0].32B, 0x1234`
+
+ ### bxr
+ set `<dest reg>` to bitwise xor between `<dest reg>` `<src reg>` <br>
+ __syntax:__ <br>
+`'bxr' <dest reg> ',' <src reg>`
+__example:__
+`bxr %ger[0].32B, %gen[1].32B`
+
+ ### bxri
+ set `<dest reg>` to bitwise xor between `<dest reg>` `<immidate>` <br>
+ `<immidate>` is unsigned 16bit value <br>
+ __syntax:__ <br>
+`'bxr' <dest reg> ',' <immidate>`
+__example:__
+`bxr %ger[0].32B, 0xFFFF`
+
+ ### bor
+ set `<dest reg>` to bitwise or between `<dest reg>` `<src reg>` <br>
+ __syntax:__ <br>
+`'bor' <dest reg> ',' <src reg>`
+__example:__
+`bor %ger[0].32B, %gen[1].32B`
+
+ ### bori
+ set `<dest reg>` to bitwise or between `<dest reg>` `<immidate>` <br>
+ `<immidate>` is unsigned 16bit value <br>
+ __syntax:__ <br>
+`'bor' <dest reg> ',' <immidate>`
+__example:__
+`bor %ger[0].32B, 0xFFFF`
+
+ ### bnd
+ set `<dest reg>` to bitwise and between `<dest reg>` `<src reg>` <br>
+ __syntax:__ <br>
+`'bnd' <dest reg> ',' <src reg>`
+__example:__
+`bnd %ger[0].32B, %gen[1].32B`
+
+ ### bndi
+ set `<dest reg>` to bitwise and between `<dest reg>` `<immidate>` <br>
+ `<immidate>` is unsigned 16bit value <br>
+ __syntax:__ <br>
+`'bnd' <dest reg> ',' <immidate>`
+__example:__
+`bnd %ger[0].32B, 0xFFFF`
+
+### rol
+left roll `<dest reg>`  by `<src reg>` <br>
+__syntax:__ <br>
+`'rol' <dest reg> ',' <src reg>` <br>
+__example:__
+`rol %gen[0].32B, %gen[1].32B`
+
+### roli
+left roll `<dest reg>` by `<immidate>` <br>
+ `<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'roli' <dest reg> ',' <immidate>` <br>
+__example:__ <br>
+`roli %gen[0].32B, 0x0001`
+
+### ror
+right roll `<dest reg>` by `<src reg>` <br>
+__syntax:__ <br>
+`'ror' <dest reg> ',' <src reg>` <br>
+__example:__
+`ror %gen[0].32B, %gen[1].32B`
+
+### rori
+right roll `<dest reg>` by `<immidate>` <br>
+ `<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'rori' <dest reg> ',' <immidate>` <br>
+__example:__ <br>
+`rori %gen[0].32B, 0x0001`
+
+### shiftl
+right shift `<dest reg>` by `<src reg>` <br>
+__syntax:__ <br>
+`'shiftl' <dest reg> ',' <src reg>` <br>
+__example:__ <br>
+`shiftl %gen[0].32B, %gen[1].32B`
+
+### shiftli
+right shift `<dest reg>` by `<immidate>` <br>
+`<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'shiftl' <dest reg> ',' <immidate>` <br>
+__example:__ <br>
+`shiftl %gen [0].32B, %gen[1].32B`
+
 - `shiftl <dest reg> <src reg>`:
   - `<dest reg>` = `<dest reg>` shift left by `<src reg>`  <br> <br>
 - `shiftli <dest reg> <immidate>`:
