@@ -889,7 +889,7 @@ namespace assembler {
 				return ans;
 			}
 
-			std::map<std::string, u32> instructionBase = {
+			std::map<std::string, u32> instructionBase = {	
 				{ "add", 0x0 },
 				{ "addc", 0x1 },
 				{ "addi", 0x2 },
