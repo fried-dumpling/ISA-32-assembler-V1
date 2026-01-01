@@ -23,20 +23,22 @@ int main(int argc, char* argv[]) {
 	assembler::createAssembler();
 
 		if (argc < 3) {
-		std::cout << "usage: assembler <input file> <output file> <-file, -token, -eval, -bin, -double>..." << std::endl;
+		std::cout << "usage: assembler <input file> <output file> <-file, -token, -preproc, -eval, -bin, -double>..." << std::endl;
 		return -1;
 	}
 
 	const char* inputFile = argv[1];
 	const char* outputFile = argv[2];
 
-	bool dumpFile = false, dumpToken = false, dumpAST = false, dumpEvaluate = false, dumpBinary = false, doubleOutput = false;
+	bool dumpFile = false, dumpToken = false, dumpPreproc = false, dumpAST = false, dumpEvaluate = false, dumpBinary = false, doubleOutput = false;
 	for (int i = 3; i < argc; i++) {
 		std::string flag = argv[i];
 		if (flag == "-file")
 			dumpFile = true;
 		else if (flag == "-token")
 			dumpToken = true;
+		else if (flag == "-preproc")
+			dumpPreproc = true;
 		else if (flag == "-eval")
 			dumpEvaluate = true;
 		else if (flag == "-bin")
@@ -65,6 +67,8 @@ int main(int argc, char* argv[]) {
 	assembler::AssemblerDump dump;
 	if (dumpToken)
 		dump.flags |= assembler::AssemblerDump::getToken;
+	if (dumpPreproc)
+		dump.flags |= assembler::AssemblerDump::getPreproc;
 	if (dumpAST)
 		dump.flags |= assembler::AssemblerDump::getAST;
 	if (dumpEvaluate)
@@ -79,6 +83,44 @@ int main(int argc, char* argv[]) {
 		cout << "lex->" << endl;
 		cout << "------------------------------------------------------------" << endl;
 		for (auto it = dump.tokens.begin(); it != dump.tokens.end(); it++) {
+			string tmp = it->text;
+			for (auto si = tmp.begin(); si != tmp.end(); ) {
+				switch (*si) {
+				case '\n':
+					si = tmp.erase(si);
+					si = tmp.insert(si, '\\');
+					si++;
+					si = tmp.insert(si, 'n');
+					break;
+				case '\t':
+					si = tmp.erase(si);
+					si = tmp.insert(si, '\\');
+					si++;
+					si = tmp.insert(si, 't');
+					break;
+				case ' ':
+					si = tmp.erase(si);
+					si = tmp.insert(si, '\'');
+					si++;
+					si = tmp.insert(si, ' ');
+					si++;
+					si = tmp.insert(si, '\'');
+					break;
+				default:
+					si++;
+					break;
+				}
+			}
+			tmp.push_back('\t');
+			cout << tmp << "; " << ((it->type == TokenType::__unknown) ? "error" : lexer::tokenStr[it->type]) << endl;
+		}
+		cout << "------------------------------------------------------------" << endl;
+	}
+
+	if (dumpPreproc) {
+		cout << "preproc->" << endl;
+		cout << "------------------------------------------------------------" << endl;
+		for (auto it = dump.preprocTokens.begin(); it != dump.preprocTokens.end(); it++) {
 			string tmp = it->text;
 			for (auto si = tmp.begin(); si != tmp.end(); ) {
 				switch (*si) {

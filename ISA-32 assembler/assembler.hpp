@@ -12,6 +12,7 @@
 #include <set>
 
 #include "lexer.hpp"
+#include "preprocesser.hpp"
 #include "parser.hpp"
 #include "evaluator.hpp"
 
@@ -28,7 +29,7 @@ namespace assembler {
 			shiftl, shiftlc, shiftli,
 			shiftr, shiftrc, shiftri,
 			rol, roli, ror, rori,
-			cmp, test,
+			cmp, cmpi, test, testi,
 
 			mov, set, sets,
 			push, pop,
@@ -51,9 +52,13 @@ namespace assembler {
 
 			define,
 			macro,
+			end,
+
+			macro_arg,
 
 			dot,
 			comma,
+			hash,
 
 			openparen, closeparen,
 			openbrace, closebrace,
@@ -108,7 +113,9 @@ namespace assembler {
 				{ "ror", TokenType::ror},
 				{ "rori", TokenType::rori},
 				{ "cmp", TokenType::cmp },
+				{ "cmpi", TokenType::cmpi },
 				{ "test", TokenType::test },
+				{ "testi", TokenType::testi },
 				{ "mov", TokenType::mov },
 				{ "set", TokenType::set },
 				{ "sets", TokenType::sets },
@@ -154,9 +161,11 @@ namespace assembler {
 
 				{ "#define", TokenType::define },
 				{ "#macro", TokenType::macro },
+				{ "#end", TokenType::end },
 
 				{ "\\.", TokenType::dot },
 				{ ",", TokenType::comma },
+				{ "#", TokenType::hash },
 				{ "\\(", TokenType::openparen },
 				{ "\\)", TokenType::closeparen },
 				{ "\\{", TokenType::openbrace },
@@ -185,6 +194,8 @@ namespace assembler {
 				{ "[0-9]+", TokenType::decnum },
 				{ "0o[0-7]+", TokenType::octnum },
 				{ "0b[01]+", TokenType::binnum },
+
+				{ "#[0-9]+", TokenType::macro_arg },
 
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
 				{ "\"[^\n\"]*([^\n\"]+(\\\\[\n\"])+)*\"", TokenType::string },
@@ -217,7 +228,9 @@ namespace assembler {
 			{ TokenType::shiftrc, "shiftrc" },
 			{ TokenType::shiftri, "shiftri" },
 			{ TokenType::cmp, "cmp" },
+			{ TokenType::cmpi, "cmpi" },
 			{ TokenType::test, "test" },
+			{ TokenType::testi, "testi" },
 			{ TokenType::mov, "mov" },
 			{ TokenType::set, "set" },
 			{ TokenType::sets, "sets" },
@@ -263,9 +276,13 @@ namespace assembler {
 
 			{ TokenType::define, "define" },
 			{ TokenType::macro, "macro" },
+			{ TokenType::end, "end" },
+
+			{ TokenType::macro_arg, "macro_arg" },
 
 			{ TokenType::dot, "dot" },
 			{ TokenType::comma, "comma" },
+			{ TokenType::hash, "hash" },
 			{ TokenType::openparen, "openparen" },
 			{ TokenType::closeparen, "closeparen" },
 			{ TokenType::openbrace, "openbrace" },
@@ -313,11 +330,291 @@ namespace assembler {
 		}
 	}
 
+	namespace preprocesser {
+		using u64 = unsigned __int64;
+
+		using TokenType = lexer::TokenType;
+		using Token = lexer::Token;
+
+		using Preprocesser = preproccesser_generator::Preprocesser<Token>;
+		using pPreprocFunc = Preprocesser::PreprocessFunction;
+		using Vec = Preprocesser::Vec;
+		using Iter = Preprocesser::Iter;
+
+		namespace functions {
+			int dec2int(std::string text) {
+				bool neg = false;
+				int ans = 0;
+
+				auto it = text.begin();
+				if (*it == '-') {
+					neg = true;
+					++it;
+				}
+				if (it != text.end() && *it == '0') ++it;
+				if (it != text.end() && *it == 'd') ++it;
+
+				for (it; it != text.end(); ++it) {
+					ans *= 10;
+					if ('0' <= *it && *it <= '9')
+						ans += *it - '0';
+				}
+				if (neg)
+					ans = -ans;
+				return ans;
+			}
+
+			int macroArg2int(std::string text) {
+				auto it = text.begin();
+				if (it != text.end()) it++;
+
+				int ans = 0;
+				for (it; it != text.end(); ++it) {
+					ans *= 10;
+					if ('0' <= *it && *it <= '9')
+						ans += *it - '0';
+				}
+				return ans;
+			}
+
+			enum class State {
+				normal,
+				readDefine_identifier,
+				readDefine_token,
+
+				readMacro_identifier,
+				readMacro_argCount,
+				readMacro_token,
+
+				replace_getArg,
+				replace_comma,
+				replace
+			};
+
+			typedef struct _PreprocData {
+				State state;
+
+				std::string curReplaceString;
+				std::vector<Token> curReplaceTokens;
+				int curMacroArgCount;
+				int depth;
+				std::unordered_map<std::string, std::pair<std::vector<Token>, int>> replaceTable;
+
+				std::vector<Token> curArg;
+				std::vector<std::vector<Token>> args;
+				int remainingArg;
+
+				std::vector<Token> replaceTokens;
+			} PreprocData;
+
+			bool handleReplace(Vec tokens, Iter it, void* vpdata) {
+				PreprocData* data = (PreprocData*)vpdata;
+
+				if (data->state != State::readDefine_identifier && 
+					data->state != State::readMacro_identifier &&
+					data->state != State::replace_getArg) {
+
+					if (it->type == TokenType::identifier) {
+						auto find = data->replaceTable.find(it->text);
+						if (find == data->replaceTable.end()) {
+							++it;
+							return true;
+						}
+
+						it = tokens.erase(it);
+
+						if (find->second.second == -1) {
+							it = tokens.insert(it, find->second.first.begin(), find->second.first.end());
+							return true;
+						}
+
+						data->state = State::replace_getArg;
+						data->replaceTokens = find->second.first;
+						data->remainingArg = find->second.second;
+						data->depth = 0;
+
+						return true;
+					}
+				}
+
+				switch (data->state) {
+				case State::replace_getArg:
+					switch (it->type) {
+					case TokenType::comma:
+						if (data->depth == 1) {
+							data->args.push_back(data->curArg);
+							data->curArg.clear();
+							data->remainingArg--;
+						}
+						else
+							data->curArg.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					case TokenType::openparen:
+						if (data->depth >= 1)
+							data->curArg.push_back(*it);
+						data->depth++;
+						it = tokens.erase(it);
+						break;
+					case TokenType::closeparen:
+						data->depth--;
+						if (!data->depth) {
+							data->args.push_back(data->curArg);
+							data->curArg.clear();
+							data->remainingArg--;
+						}
+						else
+							data->curArg.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					default:
+						data->curArg.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					}
+					if (!data->remainingArg) {
+						for (auto si = data->replaceTokens.begin(); si != data->replaceTokens.end(); ) {
+							if (si->type == TokenType::macro_arg) {
+								int id = macroArg2int(si->text);
+								if (id >= data->args.size())
+									return false;
+								si = data->replaceTokens.erase(si);
+								si = data->replaceTokens.insert(si, data->args[id].begin(), data->args[id].end());
+							}
+							else
+								++si;
+						}
+						it = tokens.insert(it, data->replaceTokens.begin(), data->replaceTokens.end());
+						data->state = State::normal;
+						return true;
+					}
+					break;
+
+				case State::normal:
+					switch (it->type) {
+					case TokenType::define:
+						data->state = State::readDefine_identifier;
+						it = tokens.erase(it);
+						break;
+
+					case TokenType::macro:
+						data->state = State::readMacro_identifier;
+						it = tokens.erase(it);
+						break;
+
+					default:
+						it++;
+						break;
+					}
+					break;
+				case State::readDefine_identifier:
+					if (it->type == TokenType::identifier) {
+						data->state = State::readDefine_token;
+						data->curReplaceString = it->text;
+						data->depth = 0;
+						it = tokens.erase(it);
+					}
+					else
+						return false;
+					break;
+				case State::readDefine_token:
+					switch (it->type) {
+					case TokenType::openbrace:
+						data->depth++;
+						it = tokens.erase(it);
+						break;
+					case TokenType::closebrace:
+						data->depth--;
+						it = tokens.erase(it);
+						break;
+					default:
+						data->curReplaceTokens.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					}
+					if (!data->depth) {
+						data->state = State::normal;
+						data->replaceTable.insert({ data->curReplaceString, { data->curReplaceTokens, -1 } });
+						data->curReplaceTokens.clear();
+					}
+					break;
+
+				case State::readMacro_identifier:
+					if (it->type == TokenType::identifier) {
+						data->state = State::readMacro_argCount;
+						data->curReplaceString = it->text;
+						it = tokens.erase(it);
+					}
+					else
+						return false;
+					break;
+				case State::readMacro_argCount:
+					if (it->type == TokenType::decnum) {
+						data->state = State::readMacro_token;
+						data->curMacroArgCount = dec2int(it->text);
+						it = tokens.erase(it);
+					}
+					else
+						return false;
+					break;
+				case State::readMacro_token:
+					switch (it->type) {
+					case TokenType::end:
+						data->state = State::normal;
+						data->replaceTable.insert({ data->curReplaceString, { data->curReplaceTokens, data->curMacroArgCount } });
+						data->curReplaceTokens.clear();
+						it = tokens.erase(it);
+						break;
+					default:
+						data->curReplaceTokens.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					}
+					break;
+				}
+
+				return true;
+			}
+
+			bool removeUnused(Vec tokens, Iter it, void* vpdata) {
+				PreprocData* data = (PreprocData*)vpdata;
+
+				switch (it->type) {
+				case TokenType::whitespace:
+				case TokenType::newline:
+				case TokenType::comment:
+					it = tokens.erase(it);
+					break;
+
+				default:
+					it++;
+					break;
+				}
+
+				return true;
+			}
+		}
+
+		Preprocesser preprocesser;
+
+		inline void setTokens(std::vector<lexer::Token>& tokens) {
+			preprocesser.setTokens(tokens);
+		}
+
+		inline bool preprocess(functions::PreprocData& data) {
+			data.state = functions::State::normal;
+			data.depth = 0;
+			if (!preprocesser.preprocess(functions::removeUnused, &data)) return false;
+			if (!preprocesser.preprocess(functions::handleReplace, &data)) return false;
+
+			return true;
+		}
+	}
+
 	namespace parser {
 		using u64 = unsigned __int64;
 
 		using TokenType = lexer::TokenType;
-		int a = (int)TokenType::__end;
 
 		NTSTART(NonterminalType)
 			program,
@@ -336,9 +633,6 @@ namespace assembler {
 
 			allocate,
 			allocate_zero,
-
-			define,
-			macro,
 
 			reg,
 			regid,
@@ -400,9 +694,6 @@ namespace assembler {
 			allocate,
 			allocate_zero,
 
-			define,
-			macro,
-
 			instruction_N,
 			instruction_R,
 			instruction_RR,
@@ -457,8 +748,6 @@ namespace assembler {
 			{ NonterminalType::label_bss, "label_bss" },
 			{ NonterminalType::allocate, "allocate" },
 			{ NonterminalType::allocate_zero, "allocate_zero" },
-			{ NonterminalType::define, "define" },
-			{ NonterminalType::macro, "macro" },
 
 			{ NonterminalType::reg, "reg" },
 			{ NonterminalType::regid, "regid" },
@@ -533,7 +822,6 @@ namespace assembler {
 			{ ASTNodeType::label_text, "label_text" },
 			{ ASTNodeType::label_data, "label_data" },
 			{ ASTNodeType::label_bss, "label_bss" },
-			{ ASTNodeType::define, "define" },
 
 			{ ASTNodeType::reg, "reg" },
 			{ ASTNodeType::regid, "regid" },
@@ -588,10 +876,6 @@ namespace assembler {
 			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false } } },
 			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false } } },
 
-			{ { NT::outer_section, AT::define, 1 }, { { TT::define, false, false }, { TT::identifier, false, false }, { NT::expression, true, false } } },
-			{ { NT::outer_section, AT::define, 1 }, { { TT::define, false, false }, { TT::identifier, false, false }, { TT::string, true, false} } },
-			{ { NT::outer_section, AT::macro, 1 }, { { TT::macro, false, false }, { TT::identifier, false, false } } },
-
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate, true, false }, { NT::data_section, true, true } } },
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::label_data, true, false }, { NT::data_section, true, true } } },
 
@@ -633,7 +917,9 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::rol, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::roli, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmp, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmpi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::test, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
@@ -652,7 +938,7 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::nop, false, false } } },
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::halt, false, false } } },
 
-			{ { NT::reg, AT::reg, 1 }, { { TT::percent, false, false }, { NT::regid, true, false }, { TT::dot, false, false }, { NT::regmode, true, false } } },
+			{ { NT::reg, AT::reg, 0 }, { { NT::regid, true, false }, { TT::dot, false, false }, { NT::regmode, true, false } } },
 
 			{ { NT::regid, AT::__epsilon, 0 }, { { NT::reg_gen, true, true } } },
 			{ { NT::regid, AT::__epsilon, 0 }, { { NT::reg_reg, true, true } } },
@@ -719,6 +1005,7 @@ namespace assembler {
 
 			{ { NT::expressionL3, AT::__epsilon, 1 }, { { NT::expressionL3, true, false }, { TT::star, false, false }, { NT::expressionL2, true, false } } },
 			{ { NT::expressionL3, AT::__epsilon, 1 }, { { NT::expressionL3, true, false }, { TT::slash, false, false }, { NT::expressionL2, true, false } } },
+			{ { NT::expressionL3, AT::__epsilon, 1 }, { { NT::expressionL3, true, false }, { TT::percent, false, false }, { NT::expressionL2, true, false} } },
 			{ { NT::expressionL3, AT::__epsilon, 0 }, { { NT::expressionL2, true, true } } },
 
 			{ { NT::expressionL2, AT::__epsilon, 1 }, { { NT::expressionL1, true, false }, { TT::dstar, false, false }, { NT::expressionL2, true, false } } },
@@ -764,8 +1051,6 @@ namespace assembler {
 
 		namespace functions {
 			typedef struct _EvalData {
-				std::unordered_map<std::string, AST*> defineTable;
-
 				u32	textByte;
 				u32 dataByte;
 				u64 bssByte;
@@ -910,10 +1195,12 @@ namespace assembler {
 				{ "shiftrc", 0x14 },
 				{ "shiftri", 0x15 },
 				{ "cmp", 0x16 },
-				{ "test", 0x17 },
-				{ "set", 0x18 },
-				{ "sets", 0x19 },
-				{ "mov", 0x1A },
+				{ "cmpi", 0x17 },
+				{ "test", 0x18 },
+				{ "testi", 0x19 },
+				{ "set", 0x1A },
+				{ "sets", 0x1B },
+				{ "mov", 0x1C },
 				{ "pop", 0x1E },
 				{ "push", 0x1F },
 				{ "ld", 0x20 },
@@ -958,25 +1245,86 @@ namespace assembler {
 				{ "gen", 7 },
 			};
 
-			bool preprocessAndConst(AST* cur, void* vpData) {
+			/*
+			AST* cpyAST(AST* src) {
+				typedef struct _QData {
+					AST* src;
+					AST* parent;
+				} QData;
+
+				std::queue<QData> searchQ;
+
+				AST* tmpRoot = new AST();
+				searchQ.push({ src, tmpRoot });
+				while (!searchQ.empty()) {
+					QData cur = searchQ.front(); searchQ.pop();
+					AST* nTree = new AST();
+					nTree->text = cur.src->text;
+					nTree->type = cur.src->type;
+					cur.parent->child.push_back(nTree);
+
+					for (auto it = cur.src->child.begin(); it != cur.src->child.end(); ++it) {
+						searchQ.push({ *it, nTree });
+					}
+				}
+
+				AST* tree = tmpRoot->child[0];
+				delete tmpRoot;
+				return tree;
+			}*/
+
+			/*
+			bool preprocess(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 
 				for (auto it = cur->child.begin(); it != cur->child.end(); ++it) {
 					if ((*it)->type == (u64)TokenType::identifier) {
 						auto find = data->defineTable.find((*it)->text);
-						if (find != data->defineTable.end())
-							*it = data->defineTable[(*it)->text];
+						if (find != data->defineTable.end()) {
+							AST* nTree = cpyAST(find->second);
+							*it = nTree;
+						}
+					}
+					else if ((*it)->type == (u64)ASTNodeType::macrocall + (u64)TokenType::__end) {
+						auto find = data->defineTable.find((*it)->text);
+						if (find != data->defineTable.end()) {
+							AST* macroTree = cpyAST(find->second);
+
+							MacroEvalData  macroData;
+							if ((*it)->child.size() == 2) {
+								for (auto si = (*it)->child[1]->child.begin(); si != (*it)->child[1]->child.end(); ++si)
+									macroData.macroArgs.push_back(*si);
+							}
+
+							Evaluator macroEval; macroEval.setTree(macroTree);
+
+							if (!macroEval.evaluate(preprocess, vpData)) return false;
+							if (!macroEval.evaluate(processMacroArg, &macroData)) return false;
+							*it = macroTree;
+						}
 					}
 				}
-
-				bool child1exp = (cur->child.size() >= 1) ? data->expressionValue.find(cur->child[0]) != data->expressionValue.end() : false;
-				bool child2exp = (cur->child.size() >= 2) ? data->expressionValue.find(cur->child[1]) != data->expressionValue.end() : false;
 
 				switch (cur->type) {
 				case (u64)ASTNodeType::define + (u64)TokenType::__end:
 					data->defineTable[cur->text] = cur->child[0];
 					break;
 
+				case (u64)ASTNodeType::macro + (u64)TokenType::__end:
+					data->defineTable[cur->text] = cur->child[1];
+					break;
+				}
+
+				return true;
+			}*/
+
+			bool calculateConst(AST* cur, void* vpData) {
+				EvalData* data = (EvalData*)vpData;
+
+				bool child1exp = (cur->child.size() >= 1) ? data->expressionValue.find(cur->child[0]) != data->expressionValue.end() : false;
+				bool child2exp = (cur->child.size() >= 2) ? data->expressionValue.find(cur->child[1]) != data->expressionValue.end() : false;
+
+				switch (cur->type) {
 				case (u64)TokenType::verticalbar: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] | data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::caret: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] ^ data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::ampersend: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] & data->expressionValue[cur->child[1]]; } break;
@@ -986,6 +1334,7 @@ namespace assembler {
 				case (u64)TokenType::minus: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] - data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::star: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::slash: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::percent: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] % data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::dstar: if (child1exp && child2exp) { data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); } break;
 				case (u64)TokenType::tilde: if (child1exp) { data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; } break;
 
@@ -1076,6 +1425,7 @@ namespace assembler {
 				case (u64)TokenType::minus: data->expressionValue[cur] = data->expressionValue[cur->child[0]] - data->expressionValue[cur->child[1]]; break;
 				case (u64)TokenType::star: data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; break;
 				case (u64)TokenType::slash: data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::percent: data->expressionValue[cur] = data->expressionValue[cur->child[0]] % data->expressionValue[cur->child[1]]; break;
 				case (u64)TokenType::dstar: data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); break;
 				case (u64)TokenType::tilde: data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; break;
 
@@ -1182,7 +1532,7 @@ namespace assembler {
 			data.dataByte = 0;
 			data.bssByte = 0;
 
-			if (!evaluator.evaluate(functions::preprocessAndConst, &data)) return false;
+			if (!evaluator.evaluate(functions::calculateConst, &data)) return false;
 			if (!evaluator.evaluate(functions::calculateSize, &data)) return false;
 
 			data.bssByte = data.dataByte + data.textByte - 1;
@@ -1213,16 +1563,18 @@ namespace assembler {
 		enum flag {
 			none = 0,
 			getToken = 1 << 0,
-			getParse = 1 << 1,
-			getAST = 1 << 2,
-			getEval = 1 << 3,
-			getBin = 1 << 4
+			getPreproc = 1 << 1,
+			getParse = 1 << 2,
+			getAST = 1 << 3,
+			getEval = 1 << 4,
+			getBin = 1 << 5
 		};
 
 		u32 flags;
 
-		bool parseSuccess, evalSuccess;
+		bool parseSuccess, preprocSuccess, evalSuccess;
 		std::vector<lexer::Token> tokens;
+		std::vector<preprocesser::Token> preprocTokens;
 		std::string errorMessage;
 		parser::Parser::ASTNode* pAST;
 		std::vector<u8> textSection;
@@ -1242,11 +1594,17 @@ namespace assembler {
 			dump.tokens = tokens;
 		}
 
-		for (auto it = tokens.begin(); it != tokens.end();) {
-			if (it->type == TokenType::whitespace || it->type == TokenType::newline || it->type == TokenType::comment)
-				it = tokens.erase(it);
-			else
-				it++;
+		preprocesser::functions::PreprocData preprocData;
+		preprocesser::setTokens(tokens);
+		bool validPreprocess = preprocesser::preprocess(preprocData);
+
+		if (dump.flags & AssemblerDump::getPreproc) {
+			dump.preprocTokens = tokens;
+			dump.preprocSuccess = validPreprocess;
+		}
+
+		if (!validPreprocess) {
+			return -1;
 		}
 
 		Parser::ASTNode* pAST;
@@ -1265,7 +1623,7 @@ namespace assembler {
 
 		if (!validParse) {
 			parser::parser.delAST(pAST);
-			return -1;
+			return -2;
 		}
 
 		evaluator::functions::EvalData data;
@@ -1278,7 +1636,7 @@ namespace assembler {
 
 		if (!validEvaluate) {
 			parser::parser.delAST(pAST);
-			return -2;
+			return -3;
 		}
 
 		if (dump.flags & AssemblerDump::getBin) {
