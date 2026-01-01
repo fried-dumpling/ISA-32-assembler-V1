@@ -475,8 +475,8 @@ namespace assembler {
 					if (!data->remainingArg) {
 						for (auto si = data->replaceTokens.begin(); si != data->replaceTokens.end(); ) {
 							if (si->type == TokenType::macro_arg) {
-								int id = macroArg2int(si->text);
-								if (id >= data->args.size())
+								int id = macroArg2int(si->text) - 1;
+								if (id < 0 || id >= data->args.size())
 									return false;
 								si = data->replaceTokens.erase(si);
 								si = data->replaceTokens.insert(si, data->args[id].begin(), data->args[id].end());
