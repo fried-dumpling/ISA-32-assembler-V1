@@ -55,6 +55,7 @@ namespace assembler {
 			end,
 
 			macro_arg,
+			identifier_unique,
 
 			dot,
 			comma,
@@ -198,6 +199,7 @@ namespace assembler {
 				{ "#[0-9]+", TokenType::macro_arg },
 
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
+				{ "##[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier_unique },
 				{ "\"[^\n\"]*([^\n\"]+(\\\\[\n\"])+)*\"", TokenType::string },
 
 				{ ";[^\n]*", TokenType::comment },
@@ -279,6 +281,7 @@ namespace assembler {
 			{ TokenType::end, "end" },
 
 			{ TokenType::macro_arg, "macro_arg" },
+			{ TokenType::identifier_unique, "identifier_unique" },
 
 			{ TokenType::dot, "dot" },
 			{ TokenType::comma, "comma" },
@@ -405,37 +408,12 @@ namespace assembler {
 				int remainingArg;
 
 				std::vector<Token> replaceTokens;
+
+				int uniqueCounter;
 			} PreprocData;
 
 			bool handleReplace(Vec tokens, Iter it, void* vpdata) {
 				PreprocData* data = (PreprocData*)vpdata;
-
-				if (data->state != State::readDefine_identifier && 
-					data->state != State::readMacro_identifier &&
-					data->state != State::replace_getArg) {
-
-					if (it->type == TokenType::identifier) {
-						auto find = data->replaceTable.find(it->text);
-						if (find == data->replaceTable.end()) {
-							++it;
-							return true;
-						}
-
-						it = tokens.erase(it);
-
-						if (find->second.second == -1) {
-							it = tokens.insert(it, find->second.first.begin(), find->second.first.end());
-							return true;
-						}
-
-						data->state = State::replace_getArg;
-						data->replaceTokens = find->second.first;
-						data->remainingArg = find->second.second;
-						data->depth = 0;
-
-						return true;
-					}
-				}
 
 				switch (data->state) {
 				case State::replace_getArg:
@@ -457,11 +435,13 @@ namespace assembler {
 						it = tokens.erase(it);
 						break;
 					case TokenType::closeparen:
-						data->depth--;
+						data->depth--; 
 						if (!data->depth) {
-							data->args.push_back(data->curArg);
-							data->curArg.clear();
-							data->remainingArg--;
+							if (data->args.size()) {
+								data->args.push_back(data->curArg);
+								data->curArg.clear();
+								data->remainingArg--;
+							}
 						}
 						else
 							data->curArg.push_back(*it);
@@ -472,7 +452,7 @@ namespace assembler {
 						it = tokens.erase(it);
 						break;
 					}
-					if (!data->remainingArg) {
+					if (!data->remainingArg && !data->depth) {
 						for (auto si = data->replaceTokens.begin(); si != data->replaceTokens.end(); ) {
 							if (si->type == TokenType::macro_arg) {
 								int id = macroArg2int(si->text) - 1;
@@ -481,9 +461,17 @@ namespace assembler {
 								si = data->replaceTokens.erase(si);
 								si = data->replaceTokens.insert(si, data->args[id].begin(), data->args[id].end());
 							}
+							else if (si->type == TokenType::identifier_unique) {
+								Token tmp = {};
+								tmp.text = si->text + "#" + std::to_string(data->uniqueCounter);
+								tmp.type = TokenType::identifier;
+								si = data->replaceTokens.erase(si);
+								si = data->replaceTokens.insert(si, tmp);
+							}
 							else
 								++si;
 						}
+						data->uniqueCounter++;
 						it = tokens.insert(it, data->replaceTokens.begin(), data->replaceTokens.end());
 						data->state = State::normal;
 						return true;
@@ -502,6 +490,29 @@ namespace assembler {
 						it = tokens.erase(it);
 						break;
 
+					case TokenType::identifier: {
+						auto find = data->replaceTable.find(it->text);
+						if (find == data->replaceTable.end()) {
+							++it;
+							break;
+						}
+
+						it = tokens.erase(it);
+
+						if (find->second.second == -1) {
+							it = tokens.insert(it, find->second.first.begin(), find->second.first.end());
+							break;
+						}
+
+						data->state = State::replace_getArg;
+						data->replaceTokens = find->second.first;
+						data->remainingArg = find->second.second;
+						data->args.clear();
+						data->depth = 0;
+
+						break;
+					}
+
 					default:
 						it++;
 						break;
@@ -519,11 +530,11 @@ namespace assembler {
 					break;
 				case State::readDefine_token:
 					switch (it->type) {
-					case TokenType::openbrace:
+					case TokenType::openparen:
 						data->depth++;
 						it = tokens.erase(it);
 						break;
-					case TokenType::closebrace:
+					case TokenType::closeparen:
 						data->depth--;
 						it = tokens.erase(it);
 						break;
@@ -604,6 +615,7 @@ namespace assembler {
 		inline bool preprocess(functions::PreprocData& data) {
 			data.state = functions::State::normal;
 			data.depth = 0;
+			data.uniqueCounter = 0;
 			if (!preprocesser.preprocess(functions::removeUnused, &data)) return false;
 			if (!preprocesser.preprocess(functions::handleReplace, &data)) return false;
 
