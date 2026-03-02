@@ -20,9 +20,14 @@ using namespace assembler::parser;
 using namespace assembler::evaluator;
 
 int main(int argc, char* argv[]) {
-	assembler::createAssembler();
+	iotools::setDirectory(argv[0]);
 
-		if (argc < 3) {
+	std::clock_t startTimeCA = std::clock();
+	assembler::createAssembler();
+	std::clock_t endTimeCA = std::clock();
+
+
+	if (argc < 3) {
 		std::cout << "usage: assembler <input file> <output file> <-file, -token, -preproc, -eval, -bin, -double>..." << std::endl;
 		return -1;
 	}
@@ -77,7 +82,10 @@ int main(int argc, char* argv[]) {
 		dump.flags |= assembler::AssemblerDump::getBin;
 
 	std::vector<u8> binary;
+
+	std::clock_t startTimeASM = std::clock();
 	assembler::assemble(buff, binary, dump);
+	std::clock_t endTimeASM = std::clock();
 
 	if (dumpToken) {
 		cout << "lex->" << endl;
@@ -191,10 +199,13 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 	}
 	
-	if (!iotools::writeBinaryFile(outputFile, binary, (doubleOutput) ? 2 : 1)) {
+	if (!iotools::writeBinaryFile(outputFile, binary)) {
 		cout << "failed to create output file \'" << inputFile << "\'" << endl;
 		return -1;
 	}
+
+	std::cout << "assembled in " << (double)(endTimeASM - startTimeASM) / CLOCKS_PER_SEC << " seconds" << std::endl;
+	std::cout << "assembler created in " << (double)(endTimeCA - startTimeCA) / CLOCKS_PER_SEC << " seconds" << std::endl;
 
 	return 0;
 }

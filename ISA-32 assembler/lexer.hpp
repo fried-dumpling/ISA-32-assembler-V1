@@ -1282,6 +1282,16 @@ namespace lexer_generator {
 			return DFATable{ table, size };
 		}
 
+		void copyTable(DFATable& dest, const DFATable& src) {
+			dest.size = src.size;
+			dest.table = new ID * [src.size];
+			for (ID i = 0; i < src.size; i++) {
+				dest.table[i] = new ID[128];
+				for (int j = 0; j < 128; j++)
+					dest.table[i][j] = src.table[i][j];
+			}
+		}
+
 		std::string int2str(int num, int len) {
 			std::string out;
 			std::vector<char> buff;
@@ -1405,11 +1415,17 @@ namespace lexer_generator {
 		}
 	};
 
+	using u8 = unsigned __int8;
+
 	template<class TokenType>
 	class LexerFactory {
 	public:
 		using CreateData = std::vector<std::vector<std::pair<std::string, TokenType>>>;
 
+		typedef struct _UpdateData {
+			table::DFATable table;
+			std::vector<std::pair<graph::ID, typename Lexer<TokenType>::EndData>> endData;
+		} UpdateData;
 	private:
 		using u64 = unsigned __int64;
 		using ID = graph::ID;
@@ -1499,6 +1515,20 @@ namespace lexer_generator {
 			}
 
 			this->dfaTable = table::createTable(DFA);
+		}
+
+		void getData(UpdateData& out) {
+			table::copyTable(out.table, this->dfaTable);
+			for (auto it = this->endDatas.begin(); it != this->endDatas.end(); ++it)
+				out.endData.push_back({ it->first, it->second });
+		}
+
+		void directUpdate(const UpdateData& in) {
+			this->clearTable();
+
+			table::copyTable(this->dfaTable, in.table);
+			for (auto it = in.endData.cbegin(); it != in.endData.cend(); ++it)
+				this->endDatas.insert({ it->first, it->second });
 		}
 
 		Lexer<TokenType> create(void) {

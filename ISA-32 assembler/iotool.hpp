@@ -12,6 +12,22 @@
 #include <set>
 
 namespace iotools {
+	std::string directory;
+	std::string executable;
+
+	void setDirectory(std::string raw_directory) {
+		size_t index1 = raw_directory.rfind("\\");
+		if (index1 == std::string::npos)
+			index1 = raw_directory.length() - 1;
+		size_t index2 = raw_directory.rfind(".");
+		if (index2 == std::string::npos)
+			index2 = raw_directory.length() - 1;
+
+
+		directory = raw_directory.substr(0, index1+1);
+		executable = raw_directory.substr(index1+1, index2-index1-1);
+	}
+
 	using u8 = unsigned __int8;
 	using u32 = unsigned __int32;
 
@@ -29,7 +45,30 @@ namespace iotools {
 		return true;
 	}
 
-	bool writeBinaryFile(const std::string& filename, const std::vector<u8>& data, int rep) {
+	bool readBinaryFile(const std::string& filename, std::vector<u8>& data) {
+		std::fstream fin;
+		fin.open(filename, std::ios::in | std::ios::binary);
+		if (!fin.is_open() || !fin.good())
+			return false;
+
+		if (!fin)
+			return false;
+
+		fin.seekg(0, fin.end);
+		int length = (int)fin.tellg();
+		fin.seekg(0, fin.beg);
+
+		data.clear();
+		char* tmp = new char[length];
+		fin.read(tmp, length);
+		for (size_t i = 0; i < length; i++)
+			data.push_back(tmp[i]);
+
+		fin.close();
+		return true;
+	}
+
+	bool writeBinaryFile(const std::string& filename, const std::vector<u8>& data) {
 		std::fstream fout;
 		fout.open(filename, std::ios::out | std::ios::binary);
 		if (!fout.is_open() || !fout.good())

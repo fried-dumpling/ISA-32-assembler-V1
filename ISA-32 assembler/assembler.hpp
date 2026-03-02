@@ -6,6 +6,7 @@
 
 #include <string>
 #include <vector>
+#include <array>
 #include <stack>
 #include <queue>
 #include <map>
@@ -15,6 +16,8 @@
 #include "preprocesser.hpp"
 #include "parser.hpp"
 #include "evaluator.hpp"
+
+#include "iotool.hpp"
 
 namespace assembler {
 	namespace lexer {
@@ -84,8 +87,8 @@ namespace assembler {
 
 			TOKENEND();
 
-		using LexerFactoy = lexer_generator::LexerFactory<TokenType>;
-		using LFCD = LexerFactoy::CreateData;
+		using LexerFactory = lexer_generator::LexerFactory<TokenType>;
+		using LFCD = LexerFactory::CreateData;
 		using Lexer = lexer_generator::Lexer<TokenType>;
 		using Token = Lexer::Token;
 
@@ -323,13 +326,22 @@ namespace assembler {
 			{ TokenType::__unknown, "unknown" }
 		};
 
-		LexerFactoy lexerFactory;
+		LexerFactory lexerFactory;
 		Lexer lexer;
 
-		inline void createLexer(void) {
+		inline void createLexer() {
 			lexerFactory.setRules(CreateData);
 			lexerFactory.update();
 			lexer = lexerFactory.create();
+		}
+
+		inline void createLexer(const LexerFactory::UpdateData& data) {
+			lexerFactory.directUpdate(data);
+			lexer = lexerFactory.create();
+		}
+
+		inline void getFactoryData(LexerFactory::UpdateData& data) {
+			lexerFactory.getData(data);
 		}
 	}
 
@@ -857,8 +869,8 @@ namespace assembler {
 			{ ASTNodeType::bin, "bin" }
 		};
 
-		using ParserFactoy = parser_generator::ParserFactory<TokenType, NonterminalType, ASTNodeType>;
-		using PFCD = ParserFactoy::CreateData;
+		using ParserFactory = parser_generator::ParserFactory<TokenType, NonterminalType, ASTNodeType>;
+		using PFCD = ParserFactory::CreateData;
 		using Parser = parser_generator::Parser<TokenType, NonterminalType, ASTNodeType>;
 		using Tree = parser_generator::PTNode;
 		using NT = NonterminalType;
@@ -1036,7 +1048,7 @@ namespace assembler {
 			{ { NT::number, AT::__epsilon, 0 }, { { TT::binnum, false, false } } }
 		};
 
-		ParserFactoy parserFactory;
+		ParserFactory parserFactory;
 		Parser parser;
 
 		inline void createParser(void) {
@@ -1044,6 +1056,15 @@ namespace assembler {
 
 			parserFactory.update();
 			parser = parserFactory.create();
+		}
+
+		inline void createParser(ParserFactory::UpdateData& data) {
+			parserFactory.directUpdate(data);
+			parser = parserFactory.create();
+		}
+
+		inline void getFactoryData(ParserFactory::UpdateData& data) {
+			parserFactory.getData(data);
 		}
 	}
 
@@ -1256,79 +1277,6 @@ namespace assembler {
 				{ "one", 6 },
 				{ "gen", 7 },
 			};
-
-			/*
-			AST* cpyAST(AST* src) {
-				typedef struct _QData {
-					AST* src;
-					AST* parent;
-				} QData;
-
-				std::queue<QData> searchQ;
-
-				AST* tmpRoot = new AST();
-				searchQ.push({ src, tmpRoot });
-				while (!searchQ.empty()) {
-					QData cur = searchQ.front(); searchQ.pop();
-					AST* nTree = new AST();
-					nTree->text = cur.src->text;
-					nTree->type = cur.src->type;
-					cur.parent->child.push_back(nTree);
-
-					for (auto it = cur.src->child.begin(); it != cur.src->child.end(); ++it) {
-						searchQ.push({ *it, nTree });
-					}
-				}
-
-				AST* tree = tmpRoot->child[0];
-				delete tmpRoot;
-				return tree;
-			}*/
-
-			/*
-			bool preprocess(AST* cur, void* vpData) {
-				EvalData* data = (EvalData*)vpData;
-
-				for (auto it = cur->child.begin(); it != cur->child.end(); ++it) {
-					if ((*it)->type == (u64)TokenType::identifier) {
-						auto find = data->defineTable.find((*it)->text);
-						if (find != data->defineTable.end()) {
-							AST* nTree = cpyAST(find->second);
-							*it = nTree;
-						}
-					}
-					else if ((*it)->type == (u64)ASTNodeType::macrocall + (u64)TokenType::__end) {
-						auto find = data->defineTable.find((*it)->text);
-						if (find != data->defineTable.end()) {
-							AST* macroTree = cpyAST(find->second);
-
-							MacroEvalData  macroData;
-							if ((*it)->child.size() == 2) {
-								for (auto si = (*it)->child[1]->child.begin(); si != (*it)->child[1]->child.end(); ++si)
-									macroData.macroArgs.push_back(*si);
-							}
-
-							Evaluator macroEval; macroEval.setTree(macroTree);
-
-							if (!macroEval.evaluate(preprocess, vpData)) return false;
-							if (!macroEval.evaluate(processMacroArg, &macroData)) return false;
-							*it = macroTree;
-						}
-					}
-				}
-
-				switch (cur->type) {
-				case (u64)ASTNodeType::define + (u64)TokenType::__end:
-					data->defineTable[cur->text] = cur->child[0];
-					break;
-
-				case (u64)ASTNodeType::macro + (u64)TokenType::__end:
-					data->defineTable[cur->text] = cur->child[1];
-					break;
-				}
-
-				return true;
-			}*/
 
 			bool calculateConst(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
@@ -1562,13 +1510,407 @@ namespace assembler {
 		}
 	}
 
+	const unsigned long long version = 100;
+
+	namespace cache {
+		using u64 = unsigned __int64;
+		using u8 = unsigned __int8;
+
+		using LexerData = lexer::LexerFactory::UpdateData;
+		using ParserData = parser::ParserFactory::UpdateData;
+
+		inline void pack(std::vector<u64>& dest, const std::vector<u8>& src) {
+			int count = 0;
+			u64 tmp = 0;
+			for (auto it = src.cbegin(); it != src.cend(); ++it) {
+				tmp = (tmp << 8) + *it;
+
+				count++; count %= 8;
+				if (!count) {
+					dest.push_back(tmp);
+					tmp = 0;
+				}
+			}
+			if (count) {
+				tmp = (tmp << (8 * (8 - count)));
+				dest.push_back(tmp);
+			}
+		}
+
+		inline void unpack(std::vector<u8>& dest, const std::vector<u64>& src) {
+			for (auto it = src.cbegin(); it != src.cend(); ++it) {
+				u64 tmp = *it;
+				for (int i = 0; i < 8; i++) {
+					dest.push_back((u8)(tmp >> 56));
+					tmp <<= 8;
+				}
+			}
+		}
+
+
+		void BinaryToLexer(LexerData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
+			u64 tableSize = *it; it++;
+			u64 endDataSize = *it; it++;
+
+			u64** table = new u64 * [tableSize];
+			for (size_t i = 0; i < tableSize; i++) {
+				table[i] = new u64[128];
+				for (size_t j = 0; j < 128; j++) {
+					table[i][j] = *it;
+					it++;
+				}
+			}
+
+			std::vector<std::array<u64, 3>> endData;
+			for (size_t i = 0; i < endDataSize; i++) {
+				std::array<u64, 3> tmp;
+				for (size_t j = 0; j < 3; j++) {
+					tmp[j] = *it;
+					it++;
+				}
+				endData.push_back(tmp);
+			}
+
+			out.table.size = tableSize;
+			out.table.table = table;
+			for (size_t i = 0; i < endDataSize; i++)
+				out.endData.push_back({ endData[i][0], { (lexer::TokenType)endData[i][1], endData[i][2] } });
+		}
+
+		void LexerToBinary(std::vector<u64>& out, const LexerData& in) {
+			u64 tableSize = in.table.size;
+			u64 endDataSize = in.endData.size();
+
+			std::vector<std::array<u64, 3>> endData;
+			for (auto it = in.endData.cbegin(); it != in.endData.cend(); ++it)
+				endData.push_back({ (u64)it->first, (u64)it->second.token, (u64)it->second.priority });
+
+			out.push_back(tableSize);
+			out.push_back(endDataSize);
+			for (size_t i = 0; i < tableSize; i++) {
+				for (size_t j = 0; j < 128; j++)
+					out.push_back(in.table.table[i][j]);
+			}
+			for (auto it = endData.cbegin(); it != endData.cend(); ++it) {
+				out.push_back((*it)[0]);
+				out.push_back((*it)[1]);
+				out.push_back((*it)[2]);
+			}
+		}
+
+
+		/*
+		typedef struct _DFATable {
+			ID** table;
+			size_t size;
+		} DFATable;
+		table::DFATable table;
+		std::vector<std::pair<graph::ID, typename Lexer<TokenType>::EndData>> endData;
+
+		typedef struct _EndData {
+			TokenType token;
+			u64 priority;
+		} EndData;
+
+		typedef struct _UpdateData {
+			std::vector<std::pair<Element, std::vector<Element>>> grammerVec;
+			std::vector<std::pair<std::pair<Element, int>, std::vector<std::pair<bool, bool>>>>ASTActionVec;
+			Table table;
+		} UpdateData;
+
+			Action** actionTable;
+			Goto** gotoTable;
+			size_t size;
+			size_t actionSize;
+			size_t gotoSize;
+
+		typedef struct _Action {
+			ID arg;
+			ActionType type;
+		} Action;
+
+		typedef struct _Goto {
+			ID state;
+			bool error;
+		} Goto;*/
+
+		void BinaryToParser(ParserData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
+			u64 tableSize = *it; it++;
+			u64 actionTableSize = *it; it++;
+			u64 gotoTableSize = *it; it++;
+			u64 vectorSize = *it; it++;
+			std::vector<u64> vectorTailSize;
+			for (size_t i = 0; i < vectorSize; i++) {
+				vectorTailSize.push_back(*it);
+				it++;
+			}
+
+			out.table.size = tableSize;
+			out.table.actionSize = actionTableSize;
+			out.table.gotoSize = gotoTableSize;
+
+			out.table.actionTable = new parser_generator::convert::Action * [tableSize];
+			for (size_t i = 0; i < tableSize; i++) {
+				out.table.actionTable[i] = new parser_generator::convert::Action[actionTableSize];
+				for (size_t j = 0; j < actionTableSize; j++) {
+					out.table.actionTable[i][j].arg = *it; it++;
+					out.table.actionTable[i][j].type = (parser_generator::convert::ActionType)*it; it++;
+				}
+			}
+
+			out.table.gotoTable = new parser_generator::convert::Goto * [tableSize];
+			for (size_t i = 0; i < tableSize; i++) {
+				out.table.gotoTable[i] = new parser_generator::convert::Goto[gotoTableSize];
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					out.table.gotoTable[i][j].state = *it; it++;
+				}
+			}
+
+			for (size_t i = 0; i < tableSize; i++) {
+				int count = 0;
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					out.table.gotoTable[i][j].error = (*it >> (63 - count)) & 1;
+					count++; count %= 64;
+					if (!count)
+						it++;
+				}
+				if (count) 
+					it++;
+			}
+
+			for (size_t i = 0; i < vectorSize; i++) {
+				u64 head = *it; it++;
+				std::vector<u64> tmp;
+				for (size_t j = 0; j < vectorTailSize[i]; j++) {
+					tmp.push_back(*it); it++;
+				}
+				out.grammerVec.push_back({ head, tmp });
+			}
+
+			for (size_t i = 0; i < vectorSize; i++) {
+				u64 head1 = *it; it++;
+				u64 head2 = *it; it++;
+				std::vector<std::pair<bool, bool>> tmp;
+				int count = 0;
+				for (size_t j = 0; j < vectorTailSize[i]; j++) {
+					bool first = (*it >> (63 - count)) & 1; count++;
+					bool second = (*it >> (63 - count)) & 1; count++;
+					tmp.push_back({ first, second });
+					count %= 32;
+					if (!count)
+						it++;
+				}
+				if (count) 
+					it++;
+				out.ASTActionVec.push_back({ {head1, head2}, tmp });
+			}
+		}
+
+		void ParserToBinary(std::vector<u64>& out, const ParserData& in) {
+			u64 tableSize = in.table.size;
+			u64 actionTableSize = in.table.actionSize;
+			u64 gotoTableSize = in.table.gotoSize;
+			u64 vectorSize = in.grammerVec.size();
+			std::vector<u64> vectorTailSize;
+			for (auto it = in.grammerVec.cbegin(); it != in.grammerVec.cend(); ++it)
+				vectorTailSize.push_back(it->second.size());
+
+			std::vector<u64> grammerVec;
+			std::vector<u64> ASTActionVec;
+
+			for (auto it = in.grammerVec.cbegin(); it != in.grammerVec.cend(); ++it) {
+				grammerVec.push_back(it->first);
+				u64 tmp = 0;
+				int count = 0;
+				for (auto si = it->second.cbegin(); si != it->second.cend(); ++si)
+					grammerVec.push_back(*si);
+			}
+
+			for (auto it = in.ASTActionVec.cbegin(); it != in.ASTActionVec.cend(); ++it) {
+				ASTActionVec.push_back(it->first.first);
+				ASTActionVec.push_back(it->first.second);
+				u64 tmp = 0;
+				int count = 0;
+				for (auto si = it->second.cbegin(); si != it->second.cend(); ++si) {
+					tmp = (tmp << 1) + (si->first ? 1 : 0);
+					tmp = (tmp << 1) + (si->second ? 1 : 0);
+					count++; count %= 32;
+					if (!count) {
+						ASTActionVec.push_back(tmp);
+						tmp = 0;
+					}
+				}
+				if (count) {
+					tmp = tmp << (2 * (32 - count));
+					ASTActionVec.push_back(tmp);
+				}
+			}
+
+			out.push_back(tableSize);
+			out.push_back(actionTableSize);
+			out.push_back(gotoTableSize);
+			out.push_back(vectorSize);
+			for (size_t i = 0; i < vectorSize; i++)
+				out.push_back(vectorTailSize[i]);
+
+			for (size_t i = 0; i < tableSize; i++) {
+				for (size_t j = 0; j < actionTableSize; j++) {
+					out.push_back(in.table.actionTable[i][j].arg);
+					out.push_back((u64)in.table.actionTable[i][j].type);
+				}
+			}
+
+			for (size_t i = 0; i < tableSize; i++) {
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					out.push_back(in.table.gotoTable[i][j].state);
+				}
+			}
+
+			for (size_t i = 0; i < tableSize; i++) {
+				u64 tmp = 0;
+				int count = 0;
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					tmp = (tmp << 1) + (in.table.gotoTable[i][j].error ? 1 : 0);
+					count++; count %= 64;
+					if (!count) {
+						out.push_back(tmp);
+						tmp = 0;
+					}
+				}
+				if (count) {
+					tmp = tmp << (64 - count);
+					out.push_back(tmp);
+				}
+			}
+
+			for (auto it = grammerVec.cbegin(); it != grammerVec.cend(); ++it)
+				out.push_back(*it);
+			for (auto it = ASTActionVec.cbegin(); it != ASTActionVec.cend(); ++it)
+				out.push_back(*it);
+		}
+
+		void clearLexerData(LexerData& in) {
+			if (in.table.table != NULL) {
+				for (size_t i = 0; i < in.table.size; i++)
+					in.table.table[i];
+				delete[] in.table.table;
+			}
+			in.table.size = 0;
+			in.table.table = NULL;
+
+			in.endData.clear();
+		}
+
+		void clearParserData(ParserData& in) {
+			if (in.table.actionTable != NULL) {
+				for (size_t i = 0; i < in.table.size; i++)
+					delete[] in.table.actionTable[i];
+				delete[] in.table.actionTable;
+			}
+			if (in.table.gotoTable != NULL) {
+				for (size_t i = 0; i < in.table.size; i++)
+					delete[] in.table.gotoTable[i];
+				delete[] in.table.gotoTable;
+			}
+			in.table.size = 0;
+			in.table.actionSize = 0;
+			in.table.gotoSize = 0;
+			in.table.actionTable = NULL;
+			in.table.gotoTable = NULL;
+
+			in.ASTActionVec.clear();
+			in.grammerVec.clear();
+		}
+
+		u64 BinaryToASM(ParserData& parseOut, LexerData& lexOut, const std::vector<u8>& in) {
+			std::vector<u64> binary;
+			pack(binary, in);
+			auto it = binary.cbegin();
+			u64 version = *it; it++;
+			BinaryToLexer(lexOut, binary, it);
+			BinaryToParser(parseOut, binary, it);
+
+			return version;
+		}
+
+		void ASMToBinary(std::vector<u8>& out, const ParserData& parseIn, const LexerData& lexIn) {
+			std::vector<u64> binary;
+			binary.push_back(version);
+			LexerToBinary(binary, lexIn);
+			ParserToBinary(binary, parseIn);
+			unpack(out, binary);
+		}
+	}
+
 	using u8 = unsigned __int8;
 	using u32 = unsigned __int32;
 	using u64 = unsigned __int64;
 
 	void createAssembler(void) {
+		/*
+		std::vector<u8> buff;
+
 		lexer::createLexer();
 		parser::createParser();
+
+		cache::LexerData lexData;
+		cache::ParserData parseData;
+
+		lexer::getFactoryData(lexData);
+		parser::getFactoryData(parseData);
+		cache::ASMToBinary(buff, parseData, lexData);
+
+		iotools::writeBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff);
+
+		buff.clear();
+		iotools::readBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff);
+
+		cache::LexerData lexData2;
+		cache::ParserData parseData2;
+		u64 fileVer = cache::BinaryToASM(parseData2, lexData2, buff);
+
+		parser_generator::convert::printTable(parseData.table, 3);
+		parser_generator::convert::printTable(parseData2.table, 3);
+
+		cache::clearLexerData(lexData);
+		cache::clearParserData(parseData);
+		cache::clearLexerData(lexData2);
+		cache::clearParserData(parseData2);*/
+
+		std::vector<u8> buff;
+		if (iotools::readBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff)) {
+			if (buff.size() < 8)
+				goto createDefault;
+
+			cache::LexerData lexData;
+			cache::ParserData parseData;
+			u64 fileVer = cache::BinaryToASM(parseData, lexData, buff);
+
+			if (fileVer == assembler::version) {
+				lexer::createLexer(lexData);
+				parser::createParser(parseData);
+
+				cache::clearLexerData(lexData);
+				cache::clearParserData(parseData);
+				return;
+			}
+		}
+		
+	createDefault:
+		lexer::createLexer();
+		parser::createParser();
+
+		cache::LexerData lexData;
+		cache::ParserData parseData;
+
+		lexer::getFactoryData(lexData);
+		parser::getFactoryData(parseData);
+		buff.clear();
+		cache::ASMToBinary(buff, parseData, lexData);
+		iotools::writeBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff);
+
+		cache::clearLexerData(lexData);
+		cache::clearParserData(parseData);
 	}
 
 	typedef struct _AssemblerDump {
