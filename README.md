@@ -307,30 +307,41 @@ __example:__ <br>
 `rori %gen[0].32B, 0x0001`
 
 ### shiftl
-right shift `<dest reg>` by `<src reg>` <br>
+left shift `<dest reg>` by `<src reg>` <br>
 __syntax:__ <br>
 `'shiftl' <dest reg> ',' <src reg>` <br>
 __example:__ <br>
 `shiftl %gen[0].32B, %gen[1].32B`
 
 ### shiftli
+left shift `<dest reg>` by `<immidate>` <br>
+`<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'shiftli' <dest reg> ',' <immidate>` <br>
+__example:__ <br>
+`shiftli %gen [0].32B, %gen[1].32B`
+
+### shiftr
+right shift `<dest reg>` by `<immidate>` <br>
+__syntax:__ <br>right shift `<dest reg>` by `<src reg>` <br>
+`'shiftr' <dest reg> ',' <src reg>` <br>
+__example:__ <br>
+`shiftr %gen [0].32B, %gen[1].32B`
+
+### shiftri
 right shift `<dest reg>` by `<immidate>` <br>
 `<immidate>` is unsigned 16bit value <br>
 __syntax:__ <br>
-`'shiftl' <dest reg> ',' <immidate>` <br>
+`'shiftri' <dest reg> ',' <immidate>` <br>
 __example:__ <br>
-`shiftl %gen [0].32B, %gen[1].32B`
+`shiftri %gen [0].32B, %gen[1].32B`
 
-- `shiftl <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` shift left by `<src reg>`  <br> <br>
-- `shiftli <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` shift left by `<immidate>`  <br> <br>
-- `shiftr <dest reg> <src reg>`:
-  - `<dest reg>` = `<dest reg>` shift right by `<src reg>`  <br> <br>
-- `shiftri <dest reg> <immidate>`:
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = `<dest reg>` shift right by `<immidate>`  <br> <br>
+### cmp
+cmp `<dest reg>` with `<immidate>` <br>
+__syntax:__ <br>right shift `<dest reg>` by `<src reg>` <br>
+`'shiftr' <dest reg> ',' <src reg>` <br>
+__example:__ <br>
+`shiftr %gen [0].32B, %gen[1].32B`
 - `cmp <dest reg> <src reg>`:
   - result is only stored in flag
   - `<dest reg>` - `<src reg>`  <br> <br>
