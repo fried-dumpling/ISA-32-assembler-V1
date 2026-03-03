@@ -120,9 +120,9 @@ namespace assembler {
 				{ "cmpi", TokenType::cmpi },
 				{ "test", TokenType::test },
 				{ "testi", TokenType::testi },
-				{ "mov", TokenType::mov },
 				{ "set", TokenType::set },
 				{ "sets", TokenType::sets },
+				{ "mov", TokenType::mov },
 				{ "push", TokenType::push },
 				{ "pop", TokenType::pop },
 				{ "ld", TokenType::ld },
@@ -945,9 +945,9 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::test, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 
-			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::sets, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::push, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::pop, false, false }, {NT::reg, true, false } } },
@@ -1510,7 +1510,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 100;
+	const unsigned long long version = 202;
 
 	namespace cache {
 		using u64 = unsigned __int64;
@@ -1547,6 +1547,31 @@ namespace assembler {
 			}
 		}
 
+		void compress(std::vector<u8>& out, const std::vector<u8>& in) {
+			u8 byte = in.front();
+			int count = -1;
+			for (auto it = in.cbegin(); it != in.cend(); ++it) {
+				if (byte != *it || count >= 255) {
+					out.push_back(byte);
+					out.push_back((u8)count);
+					byte = *it;
+					count = 0;
+					continue;
+				}
+				count++;
+			}
+			out.push_back(byte);
+			out.push_back((u8)count);
+		}
+
+		void decompress(std::vector<u8>& out, const std::vector<u8>& in) {
+			for (auto it = in.cbegin(); it != in.cend(); ) {
+				u8 byte = *it; ++it;
+				u8 count = *it; ++it;
+				for (int i = 0; i <= (int)count; i++)
+					out.push_back(byte);
+			}
+		}
 
 		void BinaryToLexer(LexerData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
 			u64 tableSize = *it; it++;
@@ -1597,42 +1622,6 @@ namespace assembler {
 				out.push_back((*it)[2]);
 			}
 		}
-
-
-		/*
-		typedef struct _DFATable {
-			ID** table;
-			size_t size;
-		} DFATable;
-		table::DFATable table;
-		std::vector<std::pair<graph::ID, typename Lexer<TokenType>::EndData>> endData;
-
-		typedef struct _EndData {
-			TokenType token;
-			u64 priority;
-		} EndData;
-
-		typedef struct _UpdateData {
-			std::vector<std::pair<Element, std::vector<Element>>> grammerVec;
-			std::vector<std::pair<std::pair<Element, int>, std::vector<std::pair<bool, bool>>>>ASTActionVec;
-			Table table;
-		} UpdateData;
-
-			Action** actionTable;
-			Goto** gotoTable;
-			size_t size;
-			size_t actionSize;
-			size_t gotoSize;
-
-		typedef struct _Action {
-			ID arg;
-			ActionType type;
-		} Action;
-
-		typedef struct _Goto {
-			ID state;
-			bool error;
-		} Goto;*/
 
 		void BinaryToParser(ParserData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
 			u64 tableSize = *it; it++;
@@ -1827,6 +1816,10 @@ namespace assembler {
 			pack(binary, in);
 			auto it = binary.cbegin();
 			u64 version = *it; it++;
+
+			if (version != assembler::version)
+				return version;
+
 			BinaryToLexer(lexOut, binary, it);
 			BinaryToParser(parseOut, binary, it);
 
@@ -1847,44 +1840,17 @@ namespace assembler {
 	using u64 = unsigned __int64;
 
 	void createAssembler(void) {
-		/*
 		std::vector<u8> buff;
-
-		lexer::createLexer();
-		parser::createParser();
-
-		cache::LexerData lexData;
-		cache::ParserData parseData;
-
-		lexer::getFactoryData(lexData);
-		parser::getFactoryData(parseData);
-		cache::ASMToBinary(buff, parseData, lexData);
-
-		iotools::writeBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff);
-
-		buff.clear();
-		iotools::readBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff);
-
-		cache::LexerData lexData2;
-		cache::ParserData parseData2;
-		u64 fileVer = cache::BinaryToASM(parseData2, lexData2, buff);
-
-		parser_generator::convert::printTable(parseData.table, 3);
-		parser_generator::convert::printTable(parseData2.table, 3);
-
-		cache::clearLexerData(lexData);
-		cache::clearParserData(parseData);
-		cache::clearLexerData(lexData2);
-		cache::clearParserData(parseData2);*/
-
-		std::vector<u8> buff;
+		std::vector<u8> temp;
 		if (iotools::readBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff)) {
 			if (buff.size() < 8)
 				goto createDefault;
 
 			cache::LexerData lexData;
 			cache::ParserData parseData;
-			u64 fileVer = cache::BinaryToASM(parseData, lexData, buff);
+			temp.reserve(buff.size());
+			cache::decompress(temp, buff);
+			u64 fileVer = cache::BinaryToASM(parseData, lexData, temp);
 
 			if (fileVer == assembler::version) {
 				lexer::createLexer(lexData);
@@ -1906,8 +1872,12 @@ namespace assembler {
 		lexer::getFactoryData(lexData);
 		parser::getFactoryData(parseData);
 		buff.clear();
+		temp.clear();
+
 		cache::ASMToBinary(buff, parseData, lexData);
-		iotools::writeBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff);
+		temp.reserve(buff.size());
+		cache::compress(temp, buff);
+		iotools::writeBinaryFile(iotools::directory + iotools::executable + "_table.bin", temp);
 
 		cache::clearLexerData(lexData);
 		cache::clearParserData(parseData);

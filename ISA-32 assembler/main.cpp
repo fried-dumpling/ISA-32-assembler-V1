@@ -7,6 +7,7 @@
 #include <map>
 #include <set>
 #include <functional>
+#include <chrono>
 
 #include "assembler.hpp"
 #include "iotool.hpp"
@@ -199,4 +200,4 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
-}
+}	
