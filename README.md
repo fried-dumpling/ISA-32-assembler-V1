@@ -319,14 +319,14 @@ left shift `<dest reg>` by `<immidate>` <br>
 __syntax:__ <br>
 `'shiftli' <dest reg> ',' <immidate>` <br>
 __example:__ <br>
-`shiftli %gen [0].32B, %gen[1].32B`
+`shiftli %gen[0].32B, 0x0001`
 
 ### shiftr
 right shift `<dest reg>` by `<immidate>` <br>
 __syntax:__ <br>right shift `<dest reg>` by `<src reg>` <br>
 `'shiftr' <dest reg> ',' <src reg>` <br>
 __example:__ <br>
-`shiftr %gen [0].32B, %gen[1].32B`
+`shiftr %gen[0].32B, %gen[1].32B`
 
 ### shiftri
 right shift `<dest reg>` by `<immidate>` <br>
@@ -334,17 +334,44 @@ right shift `<dest reg>` by `<immidate>` <br>
 __syntax:__ <br>
 `'shiftri' <dest reg> ',' <immidate>` <br>
 __example:__ <br>
-`shiftri %gen [0].32B, %gen[1].32B`
+`shiftri %gen[0].32B, 0x0001`
 
 ### cmp
-cmp `<dest reg>` with `<immidate>` <br>
-__syntax:__ <br>right shift `<dest reg>` by `<src reg>` <br>
-`'shiftr' <dest reg> ',' <src reg>` <br>
+cmp `<src1>` with `<src2>` by subtracting `<src2>` from `<src1>` <br>
+only the flag of the operation is stored <br>
+__syntax:__ <br>
+`'cmp' <src1 reg> ',' <src2 reg>` <br>
 __example:__ <br>
-`shiftr %gen [0].32B, %gen[1].32B`
-- `cmp <dest reg> <src reg>`:
-  - result is only stored in flag
-  - `<dest reg>` - `<src reg>`  <br> <br>
+`cmp %gen[0].32B, %gen[1].32B`
+
+### cmpi
+cmp `<src>` with `<immidata>` by subtracting `<immidate>` from `<src>` <br>
+`<immidate>` is unsigned 16bit value <br>
+only the flag of the operation is stored <br>
+__syntax:__ <br>
+`'cmpi' <src reg> ',' <immidate>` <br>
+__example:__ <br>
+`cmpi %gen[0].32B, 0x1234`
+
+### test
+test `<src1>` with `<src2>` by bitwise anding them <br>
+only the flag of the operation is stored <br>
+__syntax:__ <br>
+`'test' <src1 reg> ',' <src2 reg>` <br>
+__example:__ <br>
+`test %gen[0].32B, %gen[1].32B`
+
+### testi
+cmp `<src>` with `<immidata>` by bitwise anding them <br>
+`<immidate>` is unsigned 16bit value <br>
+only the flag of the operation is stored <br>
+__syntax:__ <br>
+`'testi' <src reg> ',' <immidate>` <br>
+__example:__ <br>
+`testi %gen[0].32B, 0xFFFF`
+
+###
+
 - `test <dest reg> <src reg>`:
   - result is only stored in flag
   - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`  <br> <br>
