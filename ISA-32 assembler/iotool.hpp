@@ -1,6 +1,8 @@
 #ifndef DPICP_IOTOOL_HPP
 #define DPICP_IOTOOL_HPP
 
+#include <Windows.h>
+
 #include <iostream>
 #include <fstream>
 
@@ -15,7 +17,13 @@ namespace iotools {
 	std::string directory;
 	std::string executable;
 
-	void setDirectory(std::string raw_directory) {
+	void setDirectory() {
+		char szPath[MAX_PATH];
+		if (!GetModuleFileNameA(NULL, szPath, MAX_PATH))
+			return;
+
+		std::string raw_directory(szPath);
+
 		size_t index1 = raw_directory.rfind("\\");
 		if (index1 == std::string::npos)
 			index1 = raw_directory.length() - 1;

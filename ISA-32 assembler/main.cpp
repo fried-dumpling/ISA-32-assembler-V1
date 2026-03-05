@@ -20,7 +20,7 @@ using namespace assembler::parser;
 using namespace assembler::evaluator;
 
 int main(int argc, char* argv[]) {
-	iotools::setDirectory(argv[0]);
+	iotools::setDirectory();
 
 	assembler::createAssembler();
 
