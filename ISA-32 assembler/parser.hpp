@@ -954,7 +954,10 @@ namespace parser_generator {
 			ElementWrapper(NonTerminal nt) : type(Type::NONTERMINAL), nonTerminal(nt) {}
 			ElementWrapper(ASTElement at) : type(Type::ASTTYPE), astElement(at) {}
 
-			const ElementWrapper& operator = (const ElementWrapper& other) {
+			const ElementWrapper& 
+				
+				
+				= (const ElementWrapper& other) {
 				this->type = other.type;
 				this->raw = other.raw;
 				return *this;

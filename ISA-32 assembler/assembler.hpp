@@ -882,9 +882,9 @@ namespace assembler {
 
 			{ { NT::program, AT::program, -1}, { { NT::section, true, true } } },
 
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { NT::text_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { NT::text_section, true, false }, { TT::identifier, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, false }, { TT::identifier, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, false }, { TT::identifier, true, false }, { NT::section, true, true } } },
 			{ { NT::section, AT::outer_section, -1 }, { { NT::outer_section, true, false }, { NT::section, true, true } } },
 
 			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, { NT::text_section, true, false } } },
@@ -1083,13 +1083,157 @@ namespace assembler {
 		using pEvalFunc = Evaluator::EvaluateFunction;
 
 		namespace functions {
-			typedef struct _EvalData {
-				u32	textByte;
-				u32 dataByte;
-				u64 bssByte;
+			class MovableData {
+			public:
+				s32 programCoeff;
+				s32 sectionCoeff;
+				s32 constant;
+				bool error;
 
-				std::unordered_map<std::string, u32> idenifierValue;
-				std::unordered_map<AST*, s32> expressionValue;
+				MovableData() : programCoeff(0), sectionCoeff(0), constant(0), error(false) {
+				}
+
+				MovableData(bool error) : programCoeff(0), sectionCoeff(0), constant(0), error(error) {
+				}
+
+				inline bool isConst(void) const {
+					return (!this->programCoeff && !this->sectionCoeff);
+				}
+
+				inline bool isError(void) const {
+					return this->error;
+				}
+
+				MovableData operator+(const MovableData& other) const {
+					MovableData ans;
+					ans.programCoeff = this->programCoeff + other.programCoeff;
+					ans.sectionCoeff = this->sectionCoeff + other.sectionCoeff;
+					ans.constant = this->constant + other.constant;
+					return ans;
+				}
+
+				MovableData operator-(const MovableData& other) const {
+					MovableData ans;
+					ans.programCoeff = this->programCoeff - other.programCoeff;
+					ans.sectionCoeff = this->sectionCoeff - other.sectionCoeff;
+					ans.constant = this->constant - other.constant;
+					return ans;
+				}
+
+				MovableData operator*(const MovableData& other) const {
+					if (!this->isConst() && !other.isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = (programCoeff * other.constant) |( constant * other.programCoeff);
+					ans.sectionCoeff = (sectionCoeff * other.constant) | (constant * other.sectionCoeff);
+					ans.constant = constant * other.constant;
+					return ans;
+				}
+
+				MovableData operator/(const MovableData& other) const {
+					if (!this->isConst() && !other.isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = constant / other.constant;
+					return ans;
+				}
+
+				MovableData operator%(const MovableData& other) const {
+					if (!this->isConst() && !other.isConst())
+						return MovableData(true);
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = constant % other.constant;
+					return ans;
+				}
+
+				MovableData operator<<(const MovableData& other) const {
+					if (!other.isConst())
+						return MovableData(true);
+					MovableData ans;
+					ans.programCoeff = programCoeff << other.constant;
+					ans.sectionCoeff = sectionCoeff << other.constant;
+					ans.constant = constant << other.constant;
+					return ans;
+				}
+
+				MovableData operator>>(const MovableData& other) const {
+					if (!other.isConst())
+						return MovableData(true);
+					MovableData ans;
+					ans.programCoeff = programCoeff >> other.constant;
+					ans.sectionCoeff = sectionCoeff >> other.constant;
+					ans.constant = constant >> other.constant;
+					return ans;
+				}
+
+				MovableData operator~() const {
+					if (!this->isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = ~constant;
+					return ans;
+				}
+
+				MovableData operator&(const MovableData& other) const {
+					if (!this->isConst() || !other.isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = constant & other.constant;
+					return ans;
+				}
+
+				MovableData operator|(const MovableData& other) const {
+					if (!this->isConst() || !other.isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = constant | other.constant;
+					return ans;
+				}
+
+				MovableData operator^(const MovableData& other) const {
+					if (!this->isConst() || !other.isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = constant ^ other.constant;
+					return ans;
+				}
+
+				MovableData pow(const MovableData& other) const {
+					if (!this->isConst() && !other.isConst())
+						return MovableData(true);
+
+					MovableData ans;
+					ans.programCoeff = 0;
+					ans.sectionCoeff = 0;
+					ans.constant = functions::pow(constant, other.constant);
+					return ans;
+				}
+			};
+
+			typedef struct _EvalData {
+				u32	sectionId;
+				u32 textByte;
+
+				std::unordered_map<std::string, MovableData> idenifierValue;
+				std::unordered_map<AST*, MovableData> expressionValue;
 
 				std::unordered_map<AST*, u32> instructionValue;
 				std::unordered_map<AST*, u32> dataValue;
@@ -1100,7 +1244,7 @@ namespace assembler {
 
 				std::vector<u8> rawData;
 
-				_EvalData() : textByte(0), dataByte(0), bssByte(0) {
+				_EvalData() : textByte(0), sectionId(0) {
 
 				}
 			} EvalData;
@@ -1295,7 +1439,7 @@ namespace assembler {
 				case (u64)TokenType::star: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::slash: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::percent: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] % data->expressionValue[cur->child[1]]; } break;
-				case (u64)TokenType::dstar: if (child1exp && child2exp) { data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); } break;
+				case (u64)TokenType::dstar: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]].pow(data->expressionValue[cur->child[1]]); } break;
 				case (u64)TokenType::tilde: if (child1exp) { data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; } break;
 
 				case (u64)TokenType::hexnum: data->expressionValue[cur] = hex2int(cur->text); break;
@@ -1304,9 +1448,17 @@ namespace assembler {
 				case (u64)TokenType::binnum: data->expressionValue[cur] = bin2int(cur->text); break;
 				}
 
+				auto it = data->expressionValue.find(cur);
+				if (it != data->expressionValue.end()) {
+					if (it->second.isError()) {
+						return false;
+					}
+				}
+
 				return true;
 			}
 
+			/*
 			bool calculateSize(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 
@@ -1325,17 +1477,28 @@ namespace assembler {
 				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
 					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
 						return false;
-					data->dataByte += data->expressionValue[cur->child[0]];
+					if (!data->expressionValue[cur->child[0]].isConst() || data->expressionValue[cur->child[0]].isError())
+						return false;
+					data->dataByte += data->expressionValue[cur->child[0]].constant;
 					break;
 				}
 
 				return true;
-			}
+			}*/
 
 			bool calculateLabel(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 
-				switch (cur->type) {
+				switch (cur->type) { 
+				case (u64)ASTNodeType::text_section:
+				case (u64)ASTNodeType::data_section:
+				case (u64)ASTNodeType::bss_section:
+					MovableData location;
+					location.sectionCoeff = 1;
+					location.programCoeff = 1;
+					location.constant = 0;
+					data->sectionValue[cur] = location;
+					break;
 
 				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
 				case (u64)ASTNodeType::instruction_R + (u64)TokenType::__end:
@@ -1355,7 +1518,9 @@ namespace assembler {
 				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
 					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
 						return false;
-					data->dataByte += data->expressionValue[cur->child[0]];
+					if (!data->expressionValue[cur->child[0]].isConst() || data->expressionValue[cur->child[0]].isError())
+						return false;
+					data->dataByte += data->expressionValue[cur->child[0]].constant;
 					break;
 
 				case (u64)ASTNodeType::label_data + (u64)TokenType::__end:
@@ -1365,7 +1530,8 @@ namespace assembler {
 
 				return true;
 			}
-
+			
+			/*
 			bool calculateNonconst(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 
@@ -1397,7 +1563,7 @@ namespace assembler {
 				}
 
 				return true;
-			}
+			}*/
 
 			void push32(std::vector<u8>& list, u32 inst) {
 				union {
@@ -1493,14 +1659,15 @@ namespace assembler {
 			data.bssByte = 0;
 
 			if (!evaluator.evaluate(functions::calculateConst, &data)) return false;
-			if (!evaluator.evaluate(functions::calculateSize, &data)) return false;
+			//if (!evaluator.evaluate(functions::calculateSize, &data)) return false;
 
 			data.bssByte = data.dataByte + data.textByte - 1;
 			data.dataByte = data.textByte;
 			data.textByte = 0;
 
 			if (!evaluator.evaluate(functions::calculateLabel, &data)) return false;
-			if (!evaluator.evaluate(functions::calculateNonconst, &data)) return false;
+			//if (!evaluator.evaluate(functions::calculateNonconst, &data)) return false;
+			if (!evaluator.evaluate(functions::calculateConst, &data)) return false;
 			if (!evaluator.evaluate(functions::evaluateCode, &data)) return false;
 
 			data.rawData.insert(data.rawData.end(), data.textSection.begin(), data.textSection.end());

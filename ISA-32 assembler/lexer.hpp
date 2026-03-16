@@ -489,7 +489,8 @@ namespace lexer_generator {
 		}
 
 		namespace postfixer {
-			bool isOperator(TokenType type) {
+			bool is
+			(TokenType type) {
 				switch (type) {
 				case TokenType::CLASS_SEPERATOR:
 				case TokenType::OR:
