@@ -1448,7 +1448,7 @@ namespace assembler {
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
-					data->instructionValue[cur] = ((instructionBase[cur->text] + regBase[cur->child[0]->text]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
+					data->instructionValue[cur] = ((instructionBase[cur->text] + data->instructionValue[cur->child[0]]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
