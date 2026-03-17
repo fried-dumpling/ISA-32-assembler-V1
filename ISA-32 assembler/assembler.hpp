@@ -1092,7 +1092,7 @@ namespace assembler {
 				std::unordered_map<AST*, s32> expressionValue;
 
 				std::unordered_map<AST*, u32> instructionValue;
-				std::unordered_map<AST*, u32> dataValue;
+				std::unordered_map<AST*, std::pair<u32, u32>> dataValue;
 
 				std::vector<u8> textSection;
 				std::vector<u8> dataSection;
@@ -1356,6 +1356,7 @@ namespace assembler {
 					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
 						return false;
 					data->dataByte += data->expressionValue[cur->child[0]];
+					data->dataValue[cur].second = data->expressionValue[cur->child[0]];
 					break;
 
 				case (u64)ASTNodeType::label_data + (u64)TokenType::__end:
@@ -1412,6 +1413,29 @@ namespace assembler {
 				list.push_back(conv.u8data[0]);
 			}
 
+			void pushByteN(std::vector<u8>& list, u32 data, int size) {
+				union {
+					u32 u32data;
+					u8 u8data[4];
+				} conv;
+				conv.u32data = data;
+
+				for (size; size > 4; size--) {
+					list.push_back(conv.u8data[(size-1)%4]);
+				}
+
+				switch (size) {
+				case 4:
+					list.push_back(conv.u8data[3]);
+				case 3:
+					list.push_back(conv.u8data[2]);
+				case 2:
+					list.push_back(conv.u8data[1]);
+				case 1:
+					list.push_back(conv.u8data[0]);
+				}
+			}
+
 			bool evaluateCode(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 				switch (cur->type) {
@@ -1419,8 +1443,8 @@ namespace assembler {
 				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
 					if (data->expressionValue.find(cur->child[1]) == data->expressionValue.end())
 						return false;
-					data->dataValue[cur] = data->expressionValue[cur->child[1]];
-					push32(data->dataSection, data->dataValue[cur]);
+					data->dataValue[cur].first = data->expressionValue[cur->child[1]];
+					pushByteN(data->dataSection, data->dataValue[cur].first, data->dataValue[cur].second);
 					break;
 
 				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
