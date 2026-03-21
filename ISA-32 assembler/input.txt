@@ -1,61 +1,9 @@
-#define F_zero 1 << 0
-#define F_neg 1 << 1
-#define F_pos 1 << 2
-#define F_carry 1 << 3
-#define F_carry4 1 << 4
-#define F_overflow 1 << 5
-#define F_one 1 << 6
-#define F_gen 1 << 7
-
 .data
-    input: 4, 3
-    output: 4, 0
-    stack_begin:
+    16, 0x89ABCDEF
 
 .text
-    ; <setup>
-    set %stack.S16H, stack_begin >> 16
-    set %stack.16L, stack_begin
-
-    ; <call>
-    ld.zero %gen[1].32B, input
-    call %zero.32B, func_factorial
-    st.zero %gen[0].32B, output
     halt
-
-    ; >> function section << ( No Go Zone )
-
-    ; <multiply>
-    ; gen[0] -> out: product
-    ; gen[1] -> in: multiplicand
-    ; gen[2] -> in: multiplier
-func_multiply:
-mult_loop:
-    test %gen[2].32B, %one.32B
-    jmp.zero %zero.32B, mult_skip
-    add %gen[0].32B, %gen[1].32B
-mult_skip:
-    shiftri %gen[2].32B, 1
-    shiftli %gen[1].32B, 1
-    cmp %gen[2].32B, %zero.32B
-    ijmp.zero %zero.32B, mult_loop
-    ret
-
-    ; <factorial>
-    ; gen[0] -> out: ans
-    ; gen[1] -> in: number
-    ; gen[2] -> var
-func_factorial:
-    cmp %gen[1].32B, %one.32B
-    jmp.zero %zero.32B, fact_base
-    push %gen[1].32B
-    subi %gen[1].32B, 1
-    call %zero.32B, func_factorial
-    pop %gen[1].32B
-    mov %gen[2].32B, %gen[0].32B
-    mov %gen[0].32B, %zero.32B
-    call %zero.32B, func_multiply
-    ret
-fact_base:
-    mov %gen[0].32B, %one.32B
-    ret
+    halt
+    halt
+    halt
+    halt

@@ -668,6 +668,25 @@ namespace parser_generator {
 			}
 		}
 
+		void copyTable(ParserTable& dest, const ParserTable& src) {
+			dest.size = src.size;
+			dest.actionSize = src.actionSize;
+			dest.gotoSize = src.gotoSize;
+
+			dest.actionTable = new Action*[dest.size];
+			dest.gotoTable = new Goto*[dest.size];
+
+			for (size_t i = 0; i < dest.size; i++) {
+				dest.actionTable[i] = new Action[dest.actionSize];
+				dest.gotoTable[i] = new Goto[dest.gotoSize];
+
+				for (size_t j = 0; j < dest.actionSize; j++)
+					dest.actionTable[i][j] = src.actionTable[i][j];
+				for (size_t j = 0; j < dest.gotoSize; j++)
+					dest.gotoTable[i][j] = src.gotoTable[i][j];
+			}
+		}
+
 		std::string int2str(int num, int len) {
 			std::string out;
 			std::vector<char> buff;
@@ -973,6 +992,12 @@ namespace parser_generator {
 
 		using CreateData = std::vector<std::pair<Head, std::vector<Tail>>>;
 
+		typedef struct _UpdateData {
+			std::vector<std::pair<Element, std::vector<Element>>> grammerVec;
+			std::vector<std::pair<std::pair<Element, int>, std::vector<std::pair<bool, bool>>>>ASTActionVec;
+			Table table;
+		} UpdateData;
+
 	private:
 		std::vector<std::pair<Element, std::vector<Element>>> grammerVec;
 		std::vector<std::pair<std::pair<Element, int>, std::vector<std::pair<bool, bool>>>> ASTActionVec;
@@ -1026,6 +1051,18 @@ namespace parser_generator {
 			this->clearTable();
 
 			convert::createTable(this->table, this->grammerVec, (Element)Terminal::__end, (Element)NonTerminal::__end, (Element)NonTerminal::__accept);
+		}
+
+		void getData(UpdateData& out) {
+			out.ASTActionVec = this->ASTActionVec;
+			out.grammerVec = this->grammerVec;
+			convert::copyTable(out.table, this->table);
+		}
+
+		void directUpdate(const UpdateData& in) {
+			this->ASTActionVec = in.ASTActionVec;
+			this->grammerVec = in.grammerVec;
+			convert::copyTable(this->table, in.table);
 		}
 
 		Parser<Terminal, NonTerminal, ASTElement> create(void) {

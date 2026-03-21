@@ -6,14 +6,18 @@
 
 #include <string>
 #include <vector>
+#include <array>
 #include <stack>
 #include <queue>
 #include <map>
 #include <set>
 
 #include "lexer.hpp"
+#include "preprocesser.hpp"
 #include "parser.hpp"
 #include "evaluator.hpp"
+
+#include "iotool.hpp"
 
 namespace assembler {
 	namespace lexer {
@@ -28,9 +32,9 @@ namespace assembler {
 			shiftl, shiftlc, shiftli,
 			shiftr, shiftrc, shiftri,
 			rol, roli, ror, rori,
-			cmp, test,
+			cmp, cmpi, test, testi,
 
-			mov, set,
+			mov, set, sets,
 			push, pop,
 
 			ld, st,
@@ -51,9 +55,14 @@ namespace assembler {
 
 			define,
 			macro,
+			end,
+
+			macro_arg,
+			identifier_unique,
 
 			dot,
 			comma,
+			hash,
 
 			openparen, closeparen,
 			openbrace, closebrace,
@@ -78,8 +87,8 @@ namespace assembler {
 
 			TOKENEND();
 
-		using LexerFactoy = lexer_generator::LexerFactory<TokenType>;
-		using LFCD = LexerFactoy::CreateData;
+		using LexerFactory = lexer_generator::LexerFactory<TokenType>;
+		using LFCD = LexerFactory::CreateData;
 		using Lexer = lexer_generator::Lexer<TokenType>;
 		using Token = Lexer::Token;
 
@@ -108,9 +117,12 @@ namespace assembler {
 				{ "ror", TokenType::ror},
 				{ "rori", TokenType::rori},
 				{ "cmp", TokenType::cmp },
+				{ "cmpi", TokenType::cmpi },
 				{ "test", TokenType::test },
-				{ "mov", TokenType::mov },
+				{ "testi", TokenType::testi },
 				{ "set", TokenType::set },
+				{ "sets", TokenType::sets },
+				{ "mov", TokenType::mov },
 				{ "push", TokenType::push },
 				{ "pop", TokenType::pop },
 				{ "ld", TokenType::ld },
@@ -153,9 +165,11 @@ namespace assembler {
 
 				{ "#define", TokenType::define },
 				{ "#macro", TokenType::macro },
+				{ "#end", TokenType::end },
 
 				{ "\\.", TokenType::dot },
 				{ ",", TokenType::comma },
+				{ "#", TokenType::hash },
 				{ "\\(", TokenType::openparen },
 				{ "\\)", TokenType::closeparen },
 				{ "\\{", TokenType::openbrace },
@@ -185,7 +199,10 @@ namespace assembler {
 				{ "0o[0-7]+", TokenType::octnum },
 				{ "0b[01]+", TokenType::binnum },
 
+				{ "#[0-9]+", TokenType::macro_arg },
+
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
+				{ "##[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier_unique },
 				{ "\"[^\n\"]*([^\n\"]+(\\\\[\n\"])+)*\"", TokenType::string },
 
 				{ ";[^\n]*", TokenType::comment },
@@ -216,9 +233,12 @@ namespace assembler {
 			{ TokenType::shiftrc, "shiftrc" },
 			{ TokenType::shiftri, "shiftri" },
 			{ TokenType::cmp, "cmp" },
+			{ TokenType::cmpi, "cmpi" },
 			{ TokenType::test, "test" },
+			{ TokenType::testi, "testi" },
 			{ TokenType::mov, "mov" },
 			{ TokenType::set, "set" },
+			{ TokenType::sets, "sets" },
 			{ TokenType::push, "push" },
 			{ TokenType::pop, "pop" },
 			{ TokenType::ld, "ld" },
@@ -261,9 +281,14 @@ namespace assembler {
 
 			{ TokenType::define, "define" },
 			{ TokenType::macro, "macro" },
+			{ TokenType::end, "end" },
+
+			{ TokenType::macro_arg, "macro_arg" },
+			{ TokenType::identifier_unique, "identifier_unique" },
 
 			{ TokenType::dot, "dot" },
 			{ TokenType::comma, "comma" },
+			{ TokenType::hash, "hash" },
 			{ TokenType::openparen, "openparen" },
 			{ TokenType::closeparen, "closeparen" },
 			{ TokenType::openbrace, "openbrace" },
@@ -301,13 +326,312 @@ namespace assembler {
 			{ TokenType::__unknown, "unknown" }
 		};
 
-		LexerFactoy lexerFactory;
+		LexerFactory lexerFactory;
 		Lexer lexer;
 
-		inline void createLexer(void) {
+		inline void createLexer() {
 			lexerFactory.setRules(CreateData);
 			lexerFactory.update();
 			lexer = lexerFactory.create();
+		}
+
+		inline void createLexer(const LexerFactory::UpdateData& data) {
+			lexerFactory.directUpdate(data);
+			lexer = lexerFactory.create();
+		}
+
+		inline void getFactoryData(LexerFactory::UpdateData& data) {
+			lexerFactory.getData(data);
+		}
+	}
+
+	namespace preprocesser {
+		using u64 = unsigned __int64;
+
+		using TokenType = lexer::TokenType;
+		using Token = lexer::Token;
+
+		using Preprocesser = preproccesser_generator::Preprocesser<Token>;
+		using pPreprocFunc = Preprocesser::PreprocessFunction;
+		using Vec = Preprocesser::Vec;
+		using Iter = Preprocesser::Iter;
+
+		namespace functions {
+			int dec2int(std::string text) {
+				bool neg = false;
+				int ans = 0;
+
+				auto it = text.begin();
+				if (*it == '-') {
+					neg = true;
+					++it;
+				}
+				if (it != text.end() && *it == '0') ++it;
+				if (it != text.end() && *it == 'd') ++it;
+
+				for (it; it != text.end(); ++it) {
+					ans *= 10;
+					if ('0' <= *it && *it <= '9')
+						ans += *it - '0';
+				}
+				if (neg)
+					ans = -ans;
+				return ans;
+			}
+
+			int macroArg2int(std::string text) {
+				auto it = text.begin();
+				if (it != text.end()) it++;
+
+				int ans = 0;
+				for (it; it != text.end(); ++it) {
+					ans *= 10;
+					if ('0' <= *it && *it <= '9')
+						ans += *it - '0';
+				}
+				return ans;
+			}
+
+			enum class State {
+				normal,
+				readDefine_identifier,
+				readDefine_token,
+
+				readMacro_identifier,
+				readMacro_argCount,
+				readMacro_token,
+
+				replace_getArg,
+				replace_comma,
+				replace
+			};
+
+			typedef struct _PreprocData {
+				State state;
+
+				std::string curReplaceString;
+				std::vector<Token> curReplaceTokens;
+				int curMacroArgCount;
+				int depth;
+				std::unordered_map<std::string, std::pair<std::vector<Token>, int>> replaceTable;
+
+				std::vector<Token> curArg;
+				std::vector<std::vector<Token>> args;
+				int remainingArg;
+
+				std::vector<Token> replaceTokens;
+
+				int uniqueCounter;
+			} PreprocData;
+
+			bool handleReplace(Vec tokens, Iter it, void* vpdata) {
+				PreprocData* data = (PreprocData*)vpdata;
+
+				switch (data->state) {
+				case State::replace_getArg:
+					switch (it->type) {
+					case TokenType::comma:
+						if (data->depth == 1) {
+							data->args.push_back(data->curArg);
+							data->curArg.clear();
+							data->remainingArg--;
+						}
+						else
+							data->curArg.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					case TokenType::openparen:
+						if (data->depth >= 1)
+							data->curArg.push_back(*it);
+						data->depth++;
+						it = tokens.erase(it);
+						break;
+					case TokenType::closeparen:
+						data->depth--; 
+						if (!data->depth) {
+							if (data->args.size()) {
+								data->args.push_back(data->curArg);
+								data->curArg.clear();
+								data->remainingArg--;
+							}
+						}
+						else
+							data->curArg.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					default:
+						data->curArg.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					}
+					if (!data->remainingArg && !data->depth) {
+						for (auto si = data->replaceTokens.begin(); si != data->replaceTokens.end(); ) {
+							if (si->type == TokenType::macro_arg) {
+								int id = macroArg2int(si->text) - 1;
+								if (id < 0 || id >= data->args.size())
+									return false;
+								si = data->replaceTokens.erase(si);
+								si = data->replaceTokens.insert(si, data->args[id].begin(), data->args[id].end());
+							}
+							else if (si->type == TokenType::identifier_unique) {
+								Token tmp = {};
+								tmp.text = si->text + "#" + std::to_string(data->uniqueCounter);
+								tmp.type = TokenType::identifier;
+								si = data->replaceTokens.erase(si);
+								si = data->replaceTokens.insert(si, tmp);
+							}
+							else
+								++si;
+						}
+						data->uniqueCounter++;
+						it = tokens.insert(it, data->replaceTokens.begin(), data->replaceTokens.end());
+						data->state = State::normal;
+						return true;
+					}
+					break;
+
+				case State::normal:
+					switch (it->type) {
+					case TokenType::define:
+						data->state = State::readDefine_identifier;
+						it = tokens.erase(it);
+						break;
+
+					case TokenType::macro:
+						data->state = State::readMacro_identifier;
+						it = tokens.erase(it);
+						break;
+
+					case TokenType::identifier: {
+						auto find = data->replaceTable.find(it->text);
+						if (find == data->replaceTable.end()) {
+							++it;
+							break;
+						}
+
+						it = tokens.erase(it);
+
+						if (find->second.second == -1) {
+							it = tokens.insert(it, find->second.first.begin(), find->second.first.end());
+							break;
+						}
+
+						data->state = State::replace_getArg;
+						data->replaceTokens = find->second.first;
+						data->remainingArg = find->second.second;
+						data->args.clear();
+						data->depth = 0;
+
+						break;
+					}
+
+					default:
+						it++;
+						break;
+					}
+					break;
+				case State::readDefine_identifier:
+					if (it->type == TokenType::identifier) {
+						data->state = State::readDefine_token;
+						data->curReplaceString = it->text;
+						data->depth = 0;
+						it = tokens.erase(it);
+					}
+					else
+						return false;
+					break;
+				case State::readDefine_token:
+					switch (it->type) {
+					case TokenType::openparen:
+						data->depth++;
+						it = tokens.erase(it);
+						break;
+					case TokenType::closeparen:
+						data->depth--;
+						it = tokens.erase(it);
+						break;
+					default:
+						data->curReplaceTokens.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					}
+					if (!data->depth) {
+						data->state = State::normal;
+						data->replaceTable.insert({ data->curReplaceString, { data->curReplaceTokens, -1 } });
+						data->curReplaceTokens.clear();
+					}
+					break;
+
+				case State::readMacro_identifier:
+					if (it->type == TokenType::identifier) {
+						data->state = State::readMacro_argCount;
+						data->curReplaceString = it->text;
+						it = tokens.erase(it);
+					}
+					else
+						return false;
+					break;
+				case State::readMacro_argCount:
+					if (it->type == TokenType::decnum) {
+						data->state = State::readMacro_token;
+						data->curMacroArgCount = dec2int(it->text);
+						it = tokens.erase(it);
+					}
+					else
+						return false;
+					break;
+				case State::readMacro_token:
+					switch (it->type) {
+					case TokenType::end:
+						data->state = State::normal;
+						data->replaceTable.insert({ data->curReplaceString, { data->curReplaceTokens, data->curMacroArgCount } });
+						data->curReplaceTokens.clear();
+						it = tokens.erase(it);
+						break;
+					default:
+						data->curReplaceTokens.push_back(*it);
+						it = tokens.erase(it);
+						break;
+					}
+					break;
+				}
+
+				return true;
+			}
+
+			bool removeUnused(Vec tokens, Iter it, void* vpdata) {
+				PreprocData* data = (PreprocData*)vpdata;
+
+				switch (it->type) {
+				case TokenType::whitespace:
+				case TokenType::newline:
+				case TokenType::comment:
+					it = tokens.erase(it);
+					break;
+
+				default:
+					it++;
+					break;
+				}
+
+				return true;
+			}
+		}
+
+		Preprocesser preprocesser;
+
+		inline void setTokens(std::vector<lexer::Token>& tokens) {
+			preprocesser.setTokens(tokens);
+		}
+
+		inline bool preprocess(functions::PreprocData& data) {
+			data.state = functions::State::normal;
+			data.depth = 0;
+			data.uniqueCounter = 0;
+			if (!preprocesser.preprocess(functions::removeUnused, &data)) return false;
+			if (!preprocesser.preprocess(functions::handleReplace, &data)) return false;
+
+			return true;
 		}
 	}
 
@@ -315,7 +639,6 @@ namespace assembler {
 		using u64 = unsigned __int64;
 
 		using TokenType = lexer::TokenType;
-		int a = (int)TokenType::__end;
 
 		NTSTART(NonterminalType)
 			program,
@@ -334,9 +657,6 @@ namespace assembler {
 
 			allocate,
 			allocate_zero,
-
-			define,
-			macro,
 
 			reg,
 			regid,
@@ -398,9 +718,6 @@ namespace assembler {
 			allocate,
 			allocate_zero,
 
-			define,
-			macro,
-
 			instruction_N,
 			instruction_R,
 			instruction_RR,
@@ -455,8 +772,6 @@ namespace assembler {
 			{ NonterminalType::label_bss, "label_bss" },
 			{ NonterminalType::allocate, "allocate" },
 			{ NonterminalType::allocate_zero, "allocate_zero" },
-			{ NonterminalType::define, "define" },
-			{ NonterminalType::macro, "macro" },
 
 			{ NonterminalType::reg, "reg" },
 			{ NonterminalType::regid, "regid" },
@@ -531,7 +846,6 @@ namespace assembler {
 			{ ASTNodeType::label_text, "label_text" },
 			{ ASTNodeType::label_data, "label_data" },
 			{ ASTNodeType::label_bss, "label_bss" },
-			{ ASTNodeType::define, "define" },
 
 			{ ASTNodeType::reg, "reg" },
 			{ ASTNodeType::regid, "regid" },
@@ -555,8 +869,8 @@ namespace assembler {
 			{ ASTNodeType::bin, "bin" }
 		};
 
-		using ParserFactoy = parser_generator::ParserFactory<TokenType, NonterminalType, ASTNodeType>;
-		using PFCD = ParserFactoy::CreateData;
+		using ParserFactory = parser_generator::ParserFactory<TokenType, NonterminalType, ASTNodeType>;
+		using PFCD = ParserFactory::CreateData;
 		using Parser = parser_generator::Parser<TokenType, NonterminalType, ASTNodeType>;
 		using Tree = parser_generator::PTNode;
 		using NT = NonterminalType;
@@ -585,10 +899,6 @@ namespace assembler {
 			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false } } },
 			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false } } },
 			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false } } },
-
-			{ { NT::outer_section, AT::define, 1 }, { { TT::define, false, false }, { TT::identifier, false, false }, { NT::expression, true, false } } },
-			{ { NT::outer_section, AT::define, 1 }, { { TT::define, false, false }, { TT::identifier, false, false }, { TT::string, true, false} } },
-			{ { NT::outer_section, AT::macro, 1 }, { { TT::macro, false, false }, { TT::identifier, false, false } } },
 
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate, true, false }, { NT::data_section, true, true } } },
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::label_data, true, false }, { NT::data_section, true, true } } },
@@ -631,10 +941,13 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::rol, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::roli, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmp, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmpi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::test, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 
-			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::sets, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::push, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::pop, false, false }, {NT::reg, true, false } } },
@@ -649,7 +962,7 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::nop, false, false } } },
 			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::halt, false, false } } },
 
-			{ { NT::reg, AT::reg, 1 }, { { TT::percent, false, false }, { NT::regid, true, false }, { TT::dot, false, false }, { NT::regmode, true, false } } },
+			{ { NT::reg, AT::reg, 0 }, { { NT::regid, true, false }, { TT::dot, false, false }, { NT::regmode, true, false } } },
 
 			{ { NT::regid, AT::__epsilon, 0 }, { { NT::reg_gen, true, true } } },
 			{ { NT::regid, AT::__epsilon, 0 }, { { NT::reg_reg, true, true } } },
@@ -716,6 +1029,7 @@ namespace assembler {
 
 			{ { NT::expressionL3, AT::__epsilon, 1 }, { { NT::expressionL3, true, false }, { TT::star, false, false }, { NT::expressionL2, true, false } } },
 			{ { NT::expressionL3, AT::__epsilon, 1 }, { { NT::expressionL3, true, false }, { TT::slash, false, false }, { NT::expressionL2, true, false } } },
+			{ { NT::expressionL3, AT::__epsilon, 1 }, { { NT::expressionL3, true, false }, { TT::percent, false, false }, { NT::expressionL2, true, false} } },
 			{ { NT::expressionL3, AT::__epsilon, 0 }, { { NT::expressionL2, true, true } } },
 
 			{ { NT::expressionL2, AT::__epsilon, 1 }, { { NT::expressionL1, true, false }, { TT::dstar, false, false }, { NT::expressionL2, true, false } } },
@@ -734,7 +1048,7 @@ namespace assembler {
 			{ { NT::number, AT::__epsilon, 0 }, { { TT::binnum, false, false } } }
 		};
 
-		ParserFactoy parserFactory;
+		ParserFactory parserFactory;
 		Parser parser;
 
 		inline void createParser(void) {
@@ -742,6 +1056,15 @@ namespace assembler {
 
 			parserFactory.update();
 			parser = parserFactory.create();
+		}
+
+		inline void createParser(ParserFactory::UpdateData& data) {
+			parserFactory.directUpdate(data);
+			parser = parserFactory.create();
+		}
+
+		inline void getFactoryData(ParserFactory::UpdateData& data) {
+			parserFactory.getData(data);
 		}
 	}
 
@@ -761,8 +1084,6 @@ namespace assembler {
 
 		namespace functions {
 			typedef struct _EvalData {
-				std::unordered_map<std::string, AST*> defineTable;
-
 				u32	textByte;
 				u32 dataByte;
 				u64 bssByte;
@@ -771,7 +1092,7 @@ namespace assembler {
 				std::unordered_map<AST*, s32> expressionValue;
 
 				std::unordered_map<AST*, u32> instructionValue;
-				std::unordered_map<AST*, u32> dataValue;
+				std::unordered_map<AST*, std::pair<u32, u32>> dataValue;
 
 				std::vector<u8> textSection;
 				std::vector<u8> dataSection;
@@ -883,7 +1204,7 @@ namespace assembler {
 				return ans;
 			}
 
-			std::map<std::string, u32> instructionBase = {
+			std::map<std::string, u32> instructionBase = {	
 				{ "add", 0x0 },
 				{ "addc", 0x1 },
 				{ "addi", 0x2 },
@@ -907,11 +1228,14 @@ namespace assembler {
 				{ "shiftrc", 0x14 },
 				{ "shiftri", 0x15 },
 				{ "cmp", 0x16 },
-				{ "test", 0x17 },
-				{ "mov", 0x18 },
-				{ "set", 0x19 },
-				{ "pop", 0x1A },
-				{ "push", 0x1B },
+				{ "cmpi", 0x17 },
+				{ "test", 0x18 },
+				{ "testi", 0x19 },
+				{ "set", 0x1A },
+				{ "sets", 0x1B },
+				{ "mov", 0x1C },
+				{ "pop", 0x1E },
+				{ "push", 0x1F },
 				{ "ld", 0x20 },
 				{ "st", 0x40 },
 				{ "jmp", 0x60 },
@@ -954,25 +1278,13 @@ namespace assembler {
 				{ "gen", 7 },
 			};
 
-			bool preprocessAndConst(AST* cur, void* vpData) {
+			bool calculateConst(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
-
-				for (auto it = cur->child.begin(); it != cur->child.end(); ++it) {
-					if ((*it)->type == (u64)TokenType::identifier) {
-						auto find = data->defineTable.find((*it)->text);
-						if (find != data->defineTable.end())
-							*it = data->defineTable[(*it)->text];
-					}
-				}
 
 				bool child1exp = (cur->child.size() >= 1) ? data->expressionValue.find(cur->child[0]) != data->expressionValue.end() : false;
 				bool child2exp = (cur->child.size() >= 2) ? data->expressionValue.find(cur->child[1]) != data->expressionValue.end() : false;
 
 				switch (cur->type) {
-				case (u64)ASTNodeType::define + (u64)TokenType::__end:
-					data->defineTable[cur->text] = cur->child[0];
-					break;
-
 				case (u64)TokenType::verticalbar: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] | data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::caret: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] ^ data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::ampersend: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] & data->expressionValue[cur->child[1]]; } break;
@@ -982,6 +1294,7 @@ namespace assembler {
 				case (u64)TokenType::minus: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] - data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::star: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::slash: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; } break;
+				case (u64)TokenType::percent: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] % data->expressionValue[cur->child[1]]; } break;
 				case (u64)TokenType::dstar: if (child1exp && child2exp) { data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); } break;
 				case (u64)TokenType::tilde: if (child1exp) { data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; } break;
 
@@ -1043,6 +1356,7 @@ namespace assembler {
 					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
 						return false;
 					data->dataByte += data->expressionValue[cur->child[0]];
+					data->dataValue[cur].second = data->expressionValue[cur->child[0]];
 					break;
 
 				case (u64)ASTNodeType::label_data + (u64)TokenType::__end:
@@ -1072,6 +1386,7 @@ namespace assembler {
 				case (u64)TokenType::minus: data->expressionValue[cur] = data->expressionValue[cur->child[0]] - data->expressionValue[cur->child[1]]; break;
 				case (u64)TokenType::star: data->expressionValue[cur] = data->expressionValue[cur->child[0]] * data->expressionValue[cur->child[1]]; break;
 				case (u64)TokenType::slash: data->expressionValue[cur] = data->expressionValue[cur->child[0]] / data->expressionValue[cur->child[1]]; break;
+				case (u64)TokenType::percent: data->expressionValue[cur] = data->expressionValue[cur->child[0]] % data->expressionValue[cur->child[1]]; break;
 				case (u64)TokenType::dstar: data->expressionValue[cur] = pow(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]); break;
 				case (u64)TokenType::tilde: data->expressionValue[cur] = ~data->expressionValue[cur->child[0]]; break;
 
@@ -1098,6 +1413,29 @@ namespace assembler {
 				list.push_back(conv.u8data[0]);
 			}
 
+			void pushByteN(std::vector<u8>& list, u32 data, int size) {
+				union {
+					u32 u32data;
+					u8 u8data[4];
+				} conv;
+				conv.u32data = data;
+
+				for (size; size > 4; size--) {
+					list.push_back(conv.u8data[(size-1)%4]);
+				}
+
+				switch (size) {
+				case 4:
+					list.push_back(conv.u8data[3]);
+				case 3:
+					list.push_back(conv.u8data[2]);
+				case 2:
+					list.push_back(conv.u8data[1]);
+				case 1:
+					list.push_back(conv.u8data[0]);
+				}
+			}
+
 			bool evaluateCode(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 				switch (cur->type) {
@@ -1105,8 +1443,8 @@ namespace assembler {
 				case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
 					if (data->expressionValue.find(cur->child[1]) == data->expressionValue.end())
 						return false;
-					data->dataValue[cur] = data->expressionValue[cur->child[1]];
-					push32(data->dataSection, data->dataValue[cur]);
+					data->dataValue[cur].first = data->expressionValue[cur->child[1]];
+					pushByteN(data->dataSection, data->dataValue[cur].first, data->dataValue[cur].second);
 					break;
 
 				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
@@ -1134,7 +1472,7 @@ namespace assembler {
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
-					data->instructionValue[cur] = ((instructionBase[cur->text] + regBase[cur->child[0]->text]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
+					data->instructionValue[cur] = ((instructionBase[cur->text] + data->instructionValue[cur->child[0]]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
@@ -1178,7 +1516,7 @@ namespace assembler {
 			data.dataByte = 0;
 			data.bssByte = 0;
 
-			if (!evaluator.evaluate(functions::preprocessAndConst, &data)) return false;
+			if (!evaluator.evaluate(functions::calculateConst, &data)) return false;
 			if (!evaluator.evaluate(functions::calculateSize, &data)) return false;
 
 			data.bssByte = data.dataByte + data.textByte - 1;
@@ -1196,29 +1534,395 @@ namespace assembler {
 		}
 	}
 
+	const unsigned long long version = 202;
+
+	namespace cache {
+		using u64 = unsigned __int64;
+		using u8 = unsigned __int8;
+
+		using LexerData = lexer::LexerFactory::UpdateData;
+		using ParserData = parser::ParserFactory::UpdateData;
+
+		inline void pack(std::vector<u64>& dest, const std::vector<u8>& src) {
+			int count = 0;
+			u64 tmp = 0;
+			for (auto it = src.cbegin(); it != src.cend(); ++it) {
+				tmp = (tmp << 8) + *it;
+
+				count++; count %= 8;
+				if (!count) {
+					dest.push_back(tmp);
+					tmp = 0;
+				}
+			}
+			if (count) {
+				tmp = (tmp << (8 * (8 - count)));
+				dest.push_back(tmp);
+			}
+		}
+
+		inline void unpack(std::vector<u8>& dest, const std::vector<u64>& src) {
+			for (auto it = src.cbegin(); it != src.cend(); ++it) {
+				u64 tmp = *it;
+				for (int i = 0; i < 8; i++) {
+					dest.push_back((u8)(tmp >> 56));
+					tmp <<= 8;
+				}
+			}
+		}
+
+		void compress(std::vector<u8>& out, const std::vector<u8>& in) {
+			u8 byte = in.front();
+			int count = -1;
+			for (auto it = in.cbegin(); it != in.cend(); ++it) {
+				if (byte != *it || count >= 255) {
+					out.push_back(byte);
+					out.push_back((u8)count);
+					byte = *it;
+					count = 0;
+					continue;
+				}
+				count++;
+			}
+			out.push_back(byte);
+			out.push_back((u8)count);
+		}
+
+		void decompress(std::vector<u8>& out, const std::vector<u8>& in) {
+			for (auto it = in.cbegin(); it != in.cend(); ) {
+				u8 byte = *it; ++it;
+				u8 count = *it; ++it;
+				for (int i = 0; i <= (int)count; i++)
+					out.push_back(byte);
+			}
+		}
+
+		void BinaryToLexer(LexerData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
+			u64 tableSize = *it; it++;
+			u64 endDataSize = *it; it++;
+
+			u64** table = new u64 * [tableSize];
+			for (size_t i = 0; i < tableSize; i++) {
+				table[i] = new u64[128];
+				for (size_t j = 0; j < 128; j++) {
+					table[i][j] = *it;
+					it++;
+				}
+			}
+
+			std::vector<std::array<u64, 3>> endData;
+			for (size_t i = 0; i < endDataSize; i++) {
+				std::array<u64, 3> tmp;
+				for (size_t j = 0; j < 3; j++) {
+					tmp[j] = *it;
+					it++;
+				}
+				endData.push_back(tmp);
+			}
+
+			out.table.size = tableSize;
+			out.table.table = table;
+			for (size_t i = 0; i < endDataSize; i++)
+				out.endData.push_back({ endData[i][0], { (lexer::TokenType)endData[i][1], endData[i][2] } });
+		}
+
+		void LexerToBinary(std::vector<u64>& out, const LexerData& in) {
+			u64 tableSize = in.table.size;
+			u64 endDataSize = in.endData.size();
+
+			std::vector<std::array<u64, 3>> endData;
+			for (auto it = in.endData.cbegin(); it != in.endData.cend(); ++it)
+				endData.push_back({ (u64)it->first, (u64)it->second.token, (u64)it->second.priority });
+
+			out.push_back(tableSize);
+			out.push_back(endDataSize);
+			for (size_t i = 0; i < tableSize; i++) {
+				for (size_t j = 0; j < 128; j++)
+					out.push_back(in.table.table[i][j]);
+			}
+			for (auto it = endData.cbegin(); it != endData.cend(); ++it) {
+				out.push_back((*it)[0]);
+				out.push_back((*it)[1]);
+				out.push_back((*it)[2]);
+			}
+		}
+
+		void BinaryToParser(ParserData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
+			u64 tableSize = *it; it++;
+			u64 actionTableSize = *it; it++;
+			u64 gotoTableSize = *it; it++;
+			u64 vectorSize = *it; it++;
+			std::vector<u64> vectorTailSize;
+			for (size_t i = 0; i < vectorSize; i++) {
+				vectorTailSize.push_back(*it);
+				it++;
+			}
+
+			out.table.size = tableSize;
+			out.table.actionSize = actionTableSize;
+			out.table.gotoSize = gotoTableSize;
+
+			out.table.actionTable = new parser_generator::convert::Action * [tableSize];
+			for (size_t i = 0; i < tableSize; i++) {
+				out.table.actionTable[i] = new parser_generator::convert::Action[actionTableSize];
+				for (size_t j = 0; j < actionTableSize; j++) {
+					out.table.actionTable[i][j].arg = *it; it++;
+					out.table.actionTable[i][j].type = (parser_generator::convert::ActionType)*it; it++;
+				}
+			}
+
+			out.table.gotoTable = new parser_generator::convert::Goto * [tableSize];
+			for (size_t i = 0; i < tableSize; i++) {
+				out.table.gotoTable[i] = new parser_generator::convert::Goto[gotoTableSize];
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					out.table.gotoTable[i][j].state = *it; it++;
+				}
+			}
+
+			for (size_t i = 0; i < tableSize; i++) {
+				int count = 0;
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					out.table.gotoTable[i][j].error = (*it >> (63 - count)) & 1;
+					count++; count %= 64;
+					if (!count)
+						it++;
+				}
+				if (count) 
+					it++;
+			}
+
+			for (size_t i = 0; i < vectorSize; i++) {
+				u64 head = *it; it++;
+				std::vector<u64> tmp;
+				for (size_t j = 0; j < vectorTailSize[i]; j++) {
+					tmp.push_back(*it); it++;
+				}
+				out.grammerVec.push_back({ head, tmp });
+			}
+
+			for (size_t i = 0; i < vectorSize; i++) {
+				u64 head1 = *it; it++;
+				u64 head2 = *it; it++;
+				std::vector<std::pair<bool, bool>> tmp;
+				int count = 0;
+				for (size_t j = 0; j < vectorTailSize[i]; j++) {
+					bool first = (*it >> (63 - count)) & 1; count++;
+					bool second = (*it >> (63 - count)) & 1; count++;
+					tmp.push_back({ first, second });
+					count %= 32;
+					if (!count)
+						it++;
+				}
+				if (count) 
+					it++;
+				out.ASTActionVec.push_back({ {head1, head2}, tmp });
+			}
+		}
+
+		void ParserToBinary(std::vector<u64>& out, const ParserData& in) {
+			u64 tableSize = in.table.size;
+			u64 actionTableSize = in.table.actionSize;
+			u64 gotoTableSize = in.table.gotoSize;
+			u64 vectorSize = in.grammerVec.size();
+			std::vector<u64> vectorTailSize;
+			for (auto it = in.grammerVec.cbegin(); it != in.grammerVec.cend(); ++it)
+				vectorTailSize.push_back(it->second.size());
+
+			std::vector<u64> grammerVec;
+			std::vector<u64> ASTActionVec;
+
+			for (auto it = in.grammerVec.cbegin(); it != in.grammerVec.cend(); ++it) {
+				grammerVec.push_back(it->first);
+				u64 tmp = 0;
+				int count = 0;
+				for (auto si = it->second.cbegin(); si != it->second.cend(); ++si)
+					grammerVec.push_back(*si);
+			}
+
+			for (auto it = in.ASTActionVec.cbegin(); it != in.ASTActionVec.cend(); ++it) {
+				ASTActionVec.push_back(it->first.first);
+				ASTActionVec.push_back(it->first.second);
+				u64 tmp = 0;
+				int count = 0;
+				for (auto si = it->second.cbegin(); si != it->second.cend(); ++si) {
+					tmp = (tmp << 1) + (si->first ? 1 : 0);
+					tmp = (tmp << 1) + (si->second ? 1 : 0);
+					count++; count %= 32;
+					if (!count) {
+						ASTActionVec.push_back(tmp);
+						tmp = 0;
+					}
+				}
+				if (count) {
+					tmp = tmp << (2 * (32 - count));
+					ASTActionVec.push_back(tmp);
+				}
+			}
+
+			out.push_back(tableSize);
+			out.push_back(actionTableSize);
+			out.push_back(gotoTableSize);
+			out.push_back(vectorSize);
+			for (size_t i = 0; i < vectorSize; i++)
+				out.push_back(vectorTailSize[i]);
+
+			for (size_t i = 0; i < tableSize; i++) {
+				for (size_t j = 0; j < actionTableSize; j++) {
+					out.push_back(in.table.actionTable[i][j].arg);
+					out.push_back((u64)in.table.actionTable[i][j].type);
+				}
+			}
+
+			for (size_t i = 0; i < tableSize; i++) {
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					out.push_back(in.table.gotoTable[i][j].state);
+				}
+			}
+
+			for (size_t i = 0; i < tableSize; i++) {
+				u64 tmp = 0;
+				int count = 0;
+				for (size_t j = 0; j < gotoTableSize; j++) {
+					tmp = (tmp << 1) + (in.table.gotoTable[i][j].error ? 1 : 0);
+					count++; count %= 64;
+					if (!count) {
+						out.push_back(tmp);
+						tmp = 0;
+					}
+				}
+				if (count) {
+					tmp = tmp << (64 - count);
+					out.push_back(tmp);
+				}
+			}
+
+			for (auto it = grammerVec.cbegin(); it != grammerVec.cend(); ++it)
+				out.push_back(*it);
+			for (auto it = ASTActionVec.cbegin(); it != ASTActionVec.cend(); ++it)
+				out.push_back(*it);
+		}
+
+		void clearLexerData(LexerData& in) {
+			if (in.table.table != NULL) {
+				for (size_t i = 0; i < in.table.size; i++)
+					in.table.table[i];
+				delete[] in.table.table;
+			}
+			in.table.size = 0;
+			in.table.table = NULL;
+
+			in.endData.clear();
+		}
+
+		void clearParserData(ParserData& in) {
+			if (in.table.actionTable != NULL) {
+				for (size_t i = 0; i < in.table.size; i++)
+					delete[] in.table.actionTable[i];
+				delete[] in.table.actionTable;
+			}
+			if (in.table.gotoTable != NULL) {
+				for (size_t i = 0; i < in.table.size; i++)
+					delete[] in.table.gotoTable[i];
+				delete[] in.table.gotoTable;
+			}
+			in.table.size = 0;
+			in.table.actionSize = 0;
+			in.table.gotoSize = 0;
+			in.table.actionTable = NULL;
+			in.table.gotoTable = NULL;
+
+			in.ASTActionVec.clear();
+			in.grammerVec.clear();
+		}
+
+		u64 BinaryToASM(ParserData& parseOut, LexerData& lexOut, const std::vector<u8>& in) {
+			std::vector<u64> binary;
+			pack(binary, in);
+			auto it = binary.cbegin();
+			u64 version = *it; it++;
+
+			if (version != assembler::version)
+				return version;
+
+			BinaryToLexer(lexOut, binary, it);
+			BinaryToParser(parseOut, binary, it);
+
+			return version;
+		}
+
+		void ASMToBinary(std::vector<u8>& out, const ParserData& parseIn, const LexerData& lexIn) {
+			std::vector<u64> binary;
+			binary.push_back(version);
+			LexerToBinary(binary, lexIn);
+			ParserToBinary(binary, parseIn);
+			unpack(out, binary);
+		}
+	}
+
 	using u8 = unsigned __int8;
 	using u32 = unsigned __int32;
 	using u64 = unsigned __int64;
 
 	void createAssembler(void) {
+		std::vector<u8> buff;
+		std::vector<u8> temp;
+		if (iotools::readBinaryFile(iotools::directory + iotools::executable + "_table.bin", buff)) {
+			if (buff.size() < 8)
+				goto createDefault;
+
+			cache::LexerData lexData;
+			cache::ParserData parseData;
+			temp.reserve(buff.size());
+			cache::decompress(temp, buff);
+			u64 fileVer = cache::BinaryToASM(parseData, lexData, temp);
+
+			if (fileVer == assembler::version) {
+				lexer::createLexer(lexData);
+				parser::createParser(parseData);
+
+				cache::clearLexerData(lexData);
+				cache::clearParserData(parseData);
+				return;
+			}
+		}
+		
+	createDefault:
 		lexer::createLexer();
 		parser::createParser();
+
+		cache::LexerData lexData;
+		cache::ParserData parseData;
+
+		lexer::getFactoryData(lexData);
+		parser::getFactoryData(parseData);
+		buff.clear();
+		temp.clear();
+
+		cache::ASMToBinary(buff, parseData, lexData);
+		temp.reserve(buff.size());
+		cache::compress(temp, buff);
+		iotools::writeBinaryFile(iotools::directory + iotools::executable + "_table.bin", temp);
+
+		cache::clearLexerData(lexData);
+		cache::clearParserData(parseData);
 	}
 
 	typedef struct _AssemblerDump {
 		enum flag {
 			none = 0,
 			getToken = 1 << 0,
-			getParse = 1 << 1,
-			getAST = 1 << 2,
-			getEval = 1 << 3,
-			getBin = 1 << 4
+			getPreproc = 1 << 1,
+			getParse = 1 << 2,
+			getAST = 1 << 3,
+			getEval = 1 << 4,
+			getBin = 1 << 5
 		};
 
 		u32 flags;
 
-		bool parseSuccess, evalSuccess;
+		bool parseSuccess, preprocSuccess, evalSuccess;
 		std::vector<lexer::Token> tokens;
+		std::vector<preprocesser::Token> preprocTokens;
 		std::string errorMessage;
 		parser::Parser::ASTNode* pAST;
 		std::vector<u8> textSection;
@@ -1238,11 +1942,17 @@ namespace assembler {
 			dump.tokens = tokens;
 		}
 
-		for (auto it = tokens.begin(); it != tokens.end();) {
-			if (it->type == TokenType::whitespace || it->type == TokenType::newline || it->type == TokenType::comment)
-				it = tokens.erase(it);
-			else
-				it++;
+		preprocesser::functions::PreprocData preprocData;
+		preprocesser::setTokens(tokens);
+		bool validPreprocess = preprocesser::preprocess(preprocData);
+
+		if (dump.flags & AssemblerDump::getPreproc) {
+			dump.preprocTokens = tokens;
+			dump.preprocSuccess = validPreprocess;
+		}
+
+		if (!validPreprocess) {
+			return -1;
 		}
 
 		Parser::ASTNode* pAST;
@@ -1261,7 +1971,7 @@ namespace assembler {
 
 		if (!validParse) {
 			parser::parser.delAST(pAST);
-			return -1;
+			return -2;
 		}
 
 		evaluator::functions::EvalData data;
@@ -1274,7 +1984,7 @@ namespace assembler {
 
 		if (!validEvaluate) {
 			parser::parser.delAST(pAST);
-			return -2;
+			return -3;
 		}
 
 		if (dump.flags & AssemblerDump::getBin) {
