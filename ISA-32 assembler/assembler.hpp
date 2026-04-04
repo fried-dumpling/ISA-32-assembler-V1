@@ -941,9 +941,9 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::rol, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::roli, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmp, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmpi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::cmpi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::test, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::sets, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
@@ -1534,7 +1534,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 202;
+	const unsigned long long version = 203;
 
 	namespace cache {
 		using u64 = unsigned __int64;
