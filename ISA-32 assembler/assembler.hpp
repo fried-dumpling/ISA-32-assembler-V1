@@ -1083,150 +1083,20 @@ namespace assembler {
 		using pEvalFunc = Evaluator::EvaluateFunction;
 
 		namespace functions {
-			class MovableData {
-			public:
-				s32 programCoeff;
-				s32 sectionCoeff;
+			typedef struct _MovableData {
+				std::unordered_map<s32, s32> programCoeff;
+				std::unordered_map<s32, s32> sectionCoeff;
 				s32 constant;
 				bool error;
+			} MovableData;
 
-				MovableData() : programCoeff(0), sectionCoeff(0), constant(0), error(false) {
-				}
+			inline bool doesMatch(const MovableData& A, const MovableData& B) {
+				return (A.programCoeff == B.programCoeff && A.sectionCoeff == B.sectionCoeff);
+			}
 
-				MovableData(bool error) : programCoeff(0), sectionCoeff(0), constant(0), error(error) {
-				}
-
-				inline bool isConst(void) const {
-					return (!this->programCoeff && !this->sectionCoeff);
-				}
-
-				inline bool isError(void) const {
-					return this->error;
-				}
-
-				MovableData operator+(const MovableData& other) const {
-					MovableData ans;
-					ans.programCoeff = this->programCoeff + other.programCoeff;
-					ans.sectionCoeff = this->sectionCoeff + other.sectionCoeff;
-					ans.constant = this->constant + other.constant;
-					return ans;
-				}
-
-				MovableData operator-(const MovableData& other) const {
-					MovableData ans;
-					ans.programCoeff = this->programCoeff - other.programCoeff;
-					ans.sectionCoeff = this->sectionCoeff - other.sectionCoeff;
-					ans.constant = this->constant - other.constant;
-					return ans;
-				}
-
-				MovableData operator*(const MovableData& other) const {
-					if (!this->isConst() && !other.isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = (programCoeff * other.constant) |( constant * other.programCoeff);
-					ans.sectionCoeff = (sectionCoeff * other.constant) | (constant * other.sectionCoeff);
-					ans.constant = constant * other.constant;
-					return ans;
-				}
-
-				MovableData operator/(const MovableData& other) const {
-					if (!this->isConst() && !other.isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = constant / other.constant;
-					return ans;
-				}
-
-				MovableData operator%(const MovableData& other) const {
-					if (!this->isConst() && !other.isConst())
-						return MovableData(true);
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = constant % other.constant;
-					return ans;
-				}
-
-				MovableData operator<<(const MovableData& other) const {
-					if (!other.isConst())
-						return MovableData(true);
-					MovableData ans;
-					ans.programCoeff = programCoeff << other.constant;
-					ans.sectionCoeff = sectionCoeff << other.constant;
-					ans.constant = constant << other.constant;
-					return ans;
-				}
-
-				MovableData operator>>(const MovableData& other) const {
-					if (!other.isConst())
-						return MovableData(true);
-					MovableData ans;
-					ans.programCoeff = programCoeff >> other.constant;
-					ans.sectionCoeff = sectionCoeff >> other.constant;
-					ans.constant = constant >> other.constant;
-					return ans;
-				}
-
-				MovableData operator~() const {
-					if (!this->isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = ~constant;
-					return ans;
-				}
-
-				MovableData operator&(const MovableData& other) const {
-					if (!this->isConst() || !other.isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = constant & other.constant;
-					return ans;
-				}
-
-				MovableData operator|(const MovableData& other) const {
-					if (!this->isConst() || !other.isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = constant | other.constant;
-					return ans;
-				}
-
-				MovableData operator^(const MovableData& other) const {
-					if (!this->isConst() || !other.isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = constant ^ other.constant;
-					return ans;
-				}
-
-				MovableData pow(const MovableData& other) const {
-					if (!this->isConst() && !other.isConst())
-						return MovableData(true);
-
-					MovableData ans;
-					ans.programCoeff = 0;
-					ans.sectionCoeff = 0;
-					ans.constant = functions::pow(constant, other.constant);
-					return ans;
-				}
-			};
+			inline bool isConst(const MovableData& in) {
+				return (in.programCoeff.empty() && in.sectionCoeff.empty());
+			}
 
 			typedef struct _EvalData {
 				u32	sectionId;
@@ -1427,6 +1297,10 @@ namespace assembler {
 
 				bool child1exp = (cur->child.size() >= 1) ? data->expressionValue.find(cur->child[0]) != data->expressionValue.end() : false;
 				bool child2exp = (cur->child.size() >= 2) ? data->expressionValue.find(cur->child[1]) != data->expressionValue.end() : false;
+
+				bool matchCoeff = doesMatch(data->expressionValue[cur->child[0]], data->expressionValue[cur->child[1]]);
+				bool child1C = isConst(data->expressionValue[cur->child[0]]);
+				bool child2C = isConst(data->expressionValue[cur->child[1]]);
 
 				switch (cur->type) {
 				case (u64)TokenType::verticalbar: if (child1exp && child2exp) { data->expressionValue[cur] = data->expressionValue[cur->child[0]] | data->expressionValue[cur->child[1]]; } break;
