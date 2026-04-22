@@ -223,7 +223,7 @@ namespace parser_generator {
 				SData cur = elementStack.top();
 
 				if (cur.cur < terminalEnd && firstCache.find(cur.cur) == firstCache.end()) {
-					firstCache[cur.cur].resize(std::max(firstCache[cur.cur].size(), (cur.cur >> 6) + 1), 0);
+					firstCache[cur.cur].resize(std::max(firstCache[cur.cur].size(), (size_t)(cur.cur >> 6) + 1), 0);
 					firstCache[cur.cur][cur.cur >> 6] |= (u64)1 << (cur.cur & 0b111111);
 				}
 
