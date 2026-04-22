@@ -370,21 +370,52 @@ __syntax:__ <br>
 __example:__ <br>
 `testi %gen[0].32B, 0xFFFF`
 
-###
+### mov
+move `<src>` to `<dest>` <br>
+__syntax:__ <br>
+`'mov' <dest reg> ',' <src reg>`
+__example:__ <br>
+`mov %gen[0].32B, %gen[1].32B`
 
-- `test <dest reg> <src reg>`:
-  - result is only stored in flag
-  - `<dest reg>` = `<dest reg>` bitwise and `<src reg>`  <br> <br>
-- `mov <dest reg> <src reg>`
-  - `<dest reg>` = `<dest reg>` <br> <br>
-- `set <dest reg> <immidate>`
-  - `<immidate>` is unsigned 16 bit
-- `setz <dest reg> <immidate>` <br> <br>
-  - `<immidate>` is unsigned 16 bit
-  - `<dest reg>` = expanded `<immidate>` <br> <br>
-- `sets <dest reg> <immidate>`
-  - `<immidate>` is signed 16 bit
-  - `<dest reg>` = expanded `<immidate>` <br> <br>
+### set
+set `<dest>` to `<immidate>` <br>
+`<immidate>` is unsigned 16bit value <br>
+__syntax:__ <br>
+`'set' <dest reg> ',' <immidate>`
+__example:__ <br>
+`set %gen[0].32B, 0x1234`
+
+### sets
+set `<dest>` to `<immidate>` <br>
+`<immidate>` is signed 16bit value <br>
+__syntax:__ <br>
+`'sets' <dest reg> ',' <immidate>`
+__example:__ <br>
+`sets %gen[0].32B, 0x1234`
+
+### pop
+set `<dest>` to top value from stack and pop it from stack <br>
+__syntax:__ <br>
+`'pop' <dest reg>`
+__example:__ <br>
+`pop %gen[0].32B`
+
+### push
+push `<src>` to stack <br>
+__syntax:__ <br>
+`'push' <src reg>`
+__example:__ <br>
+`push %gen[0].32B`
+
+### ld
+### st
+### jmp
+### ijmp
+### call
+### ret
+### nop
+### halt
+
 - `pop <dest reg>`
   - `<dest reg>` = stack's top data
   - stack counter decrement <br> <br>
