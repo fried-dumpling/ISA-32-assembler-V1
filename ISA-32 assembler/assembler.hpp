@@ -1917,7 +1917,7 @@ namespace assembler {
 			cache::decompress(temp, buff);
 			u64 fileVer = cache::BinaryToASM(parseData, lexData, temp);
 
-			if (fileVer == assembler::version && false) {
+			if (fileVer == assembler::version) {
 				lexer::createLexer(lexData);
 				parser::createParser(parseData);
 
