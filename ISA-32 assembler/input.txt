@@ -1,7 +1,8 @@
 #define IO_BASE 0x4000000
 #define KEY_IN 0
 #define KEY_V 4
-#define TERM_OUT 8
+#define KEY_R 8
+#define TERM_OUT 12
 
 #macro HALT 0
 ##inf_loop:
@@ -15,6 +16,7 @@
     numA:   4, 0    ; inputA
     numB:   4, 0    ; inputB
     numOut: 4, 0    ; output
+    bcdTest:4, 0    ; bcdTest
     4*20, 0
     stackEnd:
 .text
@@ -24,22 +26,36 @@
 
     set stack.32B, stackEnd     ; stack = stackEnd
     
+    set gen[1].32B, 'a'
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, '\n'
+    st.gen[24] gen[1].32B, TERM_OUT
+
     ; get numA
     call zero.32B, func_getInput
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numA
 
+    set gen[1].32B, 'b'
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, '\n'
+    st.gen[24] gen[1].32B, TERM_OUT
+
     ; get numB
-    call zero.32B, func_getInput
+    call zero.32B, func_getInput    
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numB
+    
+    set gen[1].32B, 'c'
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, '\n'
+    st.gen[24] gen[1].32B, TERM_OUT
 
     ; mem[numOut] = mem[numA] + mem[numB]
     ld.zero gen[1].32B, numA
     ld.zero gen[2].32B, numB
     add gen[1].32B, gen[2].32B
     st.zero gen[1].32B, numOut
-
 
     ; print ans
     ld.zero gen[1].32B, numOut
@@ -56,8 +72,8 @@
     ; use: gen[4] -> char holder
 func_getInput:
     set gen[1].32B, 1           ; gen[1](counter) = 1
-    set gen[2].32B, strBuff    ; gen[2](base) = strBuff
-    set gen[3].32B, 0           ; gen[3] = 0
+    set gen[2].32B, strBuff     ; gen[2](base) = strBuff
+    set gen[5].32B, 'k'                 ; gen[5] = 'k'
 
 getInput_mainloop:
     ; check valid
@@ -67,8 +83,12 @@ getInput_mainloop:
 
     ; get input
     ld.gen[24] gen[4].32B, KEY_IN       ; char = mem[IO_BASE + KEY_IN]
-    st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
-    cmpi gen[4].32B, 0x0A               ; char == '\n'
+    st.gen[24] full.32B, KEY_R          ; mem[IO_BASE + KEY_R] = 0xFFFFFFFF
+    ;st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
+
+    st.gen[24] gen[5].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = 'k'
+    
+    cmpi gen[4].32B, '\n'               ; char == '\n'
     jmp.zero zero.32B, getInput_exit    ; if (char == '\n') break
 
     st.gen[2] gen[4].32B, 0     ; mem[base] = char
@@ -91,7 +111,6 @@ getInput_exit:
     ; use: gen[1] -> char
     ; use: gen[2] -> base
     ; use: gen[3] -> tmp
-    ; use: gen[4] -> const 10
 func_convertInt:
     set gen[0].32B, 0           ; number = 0
     set gen[2].32B, strBuff    ; base = strBuff
@@ -99,6 +118,7 @@ func_convertInt:
 convertInt_mainloop:
     ld.gen[2] gen[1].32B, 0     ; char = mem[base]
     cmp gen[1].32B, zero.32B    ; char == 0
+
     jmp.zero zero.32B, convertInt_exit  ; if (char == 0) break
 
     ;number *= 10
@@ -120,69 +140,70 @@ convertInt_exit:
     ; out: mem[strBuff] -> string
     ; use: gen[2] -> base
     ; use: gen[3] -> result
-    ; use: gen[4] -> offset
+    ; use: gen[4] -> c3
     ; use: gen[5] -> tmp
-    ; use: gen[6] -> const 3
+    ; use: gen[6] -> mask
     ; use: gen[7] -> counter
     ; use: gen[8] -> sum
+    ; use: gen[9] -> tmp2
 func_convertStr:
-    set gen[2].32B, strBuff ; base = strBuff
     set gen[3].32B, 0       ; result = 0
     set gen[7].32B, 0       ; counter = 0
 
+    set gen[4].S16H, 0x3333
+    set gen[4].16L, 0x3333      ; c3 = 0x33333333
+    set gen[6].S16H, 0x8888
+    set gen[6].16L, 0x8888      ; mask = 0x88888888
+
 convertStr_mainloop:
+    mov gen[5].32B, gen[3].32B      ; tmp = result
+    add gen[5].32B, gen[4].32B      ; tmp += 0x33333333
+    bnd gen[5].32B, gen[6].32B      ; tmp &= 0x88888888
+
+    shiftri gen[5].32B, 2           
+    mov gen[9].32B, gen[5].32B      
+    shiftri gen[5].32B, 1           
+    bor gen[9].32B, gen[5].32B      ; tmp2 = (tmp >> 3)*3
+
+    add gen[3].32B, gen[9].32B      ; result += tmp2
+
     shiftli gen[1].32B, 1       ; (gen[1] <<= 1)
     shiftlc gen[3].32B, one.32B ; (gen[3] <<= 1) + carry
-    set gen[4].32B, 0           ; offset = 0
-
-convertStr_carryloop:
-    mov gen[5].32B, gen[3].32B      ; tmp = result
-    shiftr gen[5].32B, gen[4].32B   ; tmp >>= offset
-    bndi gen[5].32B, 0xF            ; tmp &= 0b1111
-    cmpi gen[5].32B, 5              ; tmp - 5 >= 0
-    jmp.neg zero.32B, convertStr_carryskip  ; if (tmp < 5) skip
-
-    set gen[6].32B, 3               ; gen[6] = 3
-    shiftl gen[6].32B, gen[4].32B   ; 3 <<= offset
-    add gen[3].32B, gen[6].32B      ; result += (3 <<= offset)
-
-convertStr_carryskip:
-    addi gen[4].32B, 4              ; offset += 4
-    cmpi gen[4].32B, 64             ; offset == 64
-    ijmp.zero zero.32B, convertStr_carryloop    ; if (offset != 64) continue loop
 
     addi gen[7].32B, 1              ; counter++
-    cmpi gen[7].32B, 64             ; counter == 64
-    jmp.zero zero.32B, convertStr_exit  ; if (counter == 64) break
+    cmpi gen[7].32B, 32             ; counter == 32
+    jmp.zero zero.32B, convertStr_exit  ; if (counter == 32) break
 
     jmp.one zero.32B, convertStr_mainloop   ; continue loop
 
 convertStr_exit:
+    st.zero gen[3].32B, bcdTest
+
+    set gen[2].32B, strBuff ; base = strBuff
     set gen[7].32B, 0               ; counter = 0
     set gen[8].32B, 0               ; sum = 0
 
 convertStr_charloop:
     mov gen[5].32B, gen[3].32B      ; tmp = result
-    bndi gen[5].32B, 0xf            ; tmp &= 0b1111
+    shiftri gen[5].32B, 28          ; tmp >>= 28
     add gen[8].32B, gen[5].32B      ; sum += tmp
 
     cmpi gen[8].32B, 0              ; sum == 0
-    jmp.zero zero.32B, convertStr_exitchar  ; if (sum == 0) skip
+    jmp.zero zero.32B, convertStr_skipchar  ; if (sum == 0) skip
 
     addi gen[5].32B, 48             ; tmp += 48
     st.gen[2] gen[5].32B, 0         ; mem[base] = tmp
+    addi gen[2].32B, 4              ; base += 4
 
 convertStr_skipchar:
-    addi gen[2].32B, 4              ; base += 4s
-    shiftri gen[3].32B, 4           ; result >>= 4
+    shiftli gen[3].32B, 4           ; result <<= 4
     addi gen[7].32B, 1              ; counter++
-    cmpi gen[7].32B, 16             ; counter == 16
-    ijmp.zero zero.32B, convertStr_charloop ; if (counter != 16) loop
+    cmpi gen[7].32B, 8             ; counter == 8
+    ijmp.zero zero.32B, convertStr_charloop ; if (counter != 8) loop
 
     ; exit
     st.gen[2] zero.32B, 0           ; mem[base] = 0
     ret                             ; return
-
 
     ; <print>
     ; in: mem[strBuff] -> string
@@ -192,12 +213,12 @@ func_print:
     set gen[2].32B, strBuff     ; base = strBuff
 
 print_mainloop:
-    ld.gen[2] gen[1].32B, 0     ; char = mem[base]
-    cmpi gen[1].32B, 0          ; char == 0
-    jmp.zero zero.32B, print_exit   ; if (char == 0) break
+    ld.gen[2] gen[1].32B, 0             ; char = mem[base]
+    cmpi gen[1].32B, 0                  ; char == 0
+    jmp.zero zero.32B, print_exit       ; if (char == 0) break
 
-    st.gen[24] gen[1].32B, 0    ; mem[IO_BASE, TERM_OUT] = tmp
-    addi gen[2].32B, 4          ; base += 4
+    st.gen[24] gen[1].32B, TERM_OUT     ; mem[IO_BASE, TERM_OUT] = tmp
+    addi gen[2].32B, 4                  ; base += 4
     jmp.one zero.32B, print_mainloop    ; continue loop
 
 print_exit:
