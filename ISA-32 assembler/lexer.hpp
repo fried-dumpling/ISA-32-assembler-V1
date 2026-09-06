@@ -22,7 +22,7 @@
 
 namespace lexer_generator {
 	namespace graph {
-		using ID = unsigned long long;
+		using ID = unsigned int;
 		class UIDSet {
 		private:
 			std::set<ID> used;

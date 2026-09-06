@@ -1318,100 +1318,100 @@ namespace assembler {
 				return ans;
 			}
 
-			std::map<u64, u32> instructionBase = {	
-				{ (u64)TokenType::add, 0x0 },
-				{ (u64)TokenType::addc, 0x1 },
-				{ (u64)TokenType::addi, 0x2},
-				{ (u64)TokenType::sub, 0x3 },
-				{ (u64)TokenType::subc, 0x4 },
-				{ (u64)TokenType::subi, 0x5 },
-				{ (u64)TokenType::bxr, 0x6 },
-				{ (u64)TokenType::bxri, 0x7 },
-				{ (u64)TokenType::bor, 0x8 },
-				{ (u64)TokenType::bori, 0x9 },
-				{ (u64)TokenType::bnd, 0xA },
-				{ (u64)TokenType::bndi, 0xB },
-				{ (u64)TokenType::rol, 0xC },
-				{ (u64)TokenType::roli, 0xD },
-				{ (u64)TokenType::ror, 0xE },
-				{ (u64)TokenType::rori, 0xF },
-				{ (u64)TokenType::shiftl, 0x10 },
-				{ (u64)TokenType::shiftlc, 0x11 },
-				{ (u64)TokenType::shiftli, 0x12 },
-				{ (u64)TokenType::shiftr, 0x13 },
-				{ (u64)TokenType::shiftrc, 0x14 },
-				{ (u64)TokenType::shiftri, 0x15 },
-				{ (u64)TokenType::cmp, 0x16 },
-				{ (u64)TokenType::cmpi, 0x17 },
-				{ (u64)TokenType::test, 0x18 },
-				{ (u64)TokenType::testi, 0x19 },
+			std::map<std::string, u32> instructionBase = {	
+				{ "add", 0x0 },
+				{ "addc", 0x1 },
+				{ "addi", 0x2},
+				{ "sub", 0x3 },
+				{ "subc", 0x4 },
+				{ "subi", 0x5 },
+				{ "bxr", 0x6 },
+				{ "bxri", 0x7 },
+				{ "bor", 0x8 },
+				{ "bori", 0x9 },
+				{ "bnd", 0xA },
+				{ "bndi", 0xB },
+				{ "rol", 0xC },
+				{ "roli", 0xD },
+				{ "ror", 0xE },
+				{ "rori", 0xF },
+				{ "shiftl", 0x10 },
+				{ "shiftlc", 0x11 },
+				{ "shiftli", 0x12 },
+				{ "shiftr", 0x13 },
+				{ "shiftrc", 0x14 },
+				{ "shiftri", 0x15 },
+				{ "cmp", 0x16 },
+				{ "cmpi", 0x17 },
+				{ "test", 0x18 },
+				{ "testi", 0x19 },
 
-				{ (u64)TokenType::set, 0x1A },
-				{ (u64)TokenType::sets, 0x1B },
-				{ (u64)TokenType::mov, 0x1C },
+				{ "set", 0x1A },
+				{ "sets", 0x1B },
+				{ "mov", 0x1C },
 
-				{ (u64)TokenType::block, 0x1D },
+				{ "block", 0x1D },
 
-				{ (u64)TokenType::pop, 0x1E },
-				{ (u64)TokenType::push, 0x1F },
+				{ "pop", 0x1E },
+				{ "push", 0x1F },
 
-				{ (u64)TokenType::ld, 0x20 },
-				{ (u64)TokenType::st, 0x40 },
+				{ "ld", 0x20 },
+				{ "st", 0x40 },
 
-				{ (u64)TokenType::jmp, 0x60 },
-				{ (u64)TokenType::ijmp, 0x68 },
-				{ (u64)TokenType::call, 0x70 },
-				{ (u64)TokenType::ret, 0x71 },
-				{ (u64)TokenType::nop, 0x72 },
-				{ (u64)TokenType::brk, 0x73 },
-				{ (u64)TokenType::wait, 0x74 },
-				{ (u64)TokenType::halt, 0x75 },
+				{ "jmp", 0x60 },
+				{ "ijmp", 0x68 },
+				{ "call", 0x70 },
+				{ "ret", 0x71 },
+				{ "nop", 0x72 },
+				{ "brk", 0x73 },
+				{ "wait", 0x74 },
+				{ "halt", 0x75 },
 
-				{ (u64)TokenType::syscall, 0x76 },
-				{ (u64)TokenType::iret, 0x77 },
-				{ (u64)TokenType::intervec, 0x78 },
-				{ (u64)TokenType::interpri, 0x79 },
+				{ "syscall", 0x76 },
+				{ "iret", 0x77 },
+				{ "intervec", 0x78 },
+				{ "interpri", 0x79 },
 
-				{ (u64)TokenType::ldexp, 0x7A },
-				{ (u64)TokenType::stexp, 0x7B }
+				{ "ldexp", 0x7A },
+				{ "stexp", 0x7B }
 			};
 
-			std::map<u64, u32> regExBase = {
-				{ (u64)TokenType::istack, 0x0 },
-				{ (u64)TokenType::panicvec, 0x1 },
-				{ (u64)TokenType::cpuid, 0x2 }
+			std::map<std::string, u32> regExBase = {
+				{ "istack", 0x0 },
+				{ "panicvec", 0x1 },
+				{ "cpuid", 0x2 }
 			};
 
-			std::map<u64, u32> regBase = {
-				{ (u64)TokenType::reg, 0x0 },
-				{ (u64)TokenType::gen, 0x0 },
-				{ (u64)TokenType::sbp, 0x19 },
-				{ (u64)TokenType::zero, 0x1A },
-				{ (u64)TokenType::one, 0x1B },
-				{ (u64)TokenType::full, 0x1C },
-				{ (u64)TokenType::pc, 0x1D },
-				{ (u64)TokenType::stack, 0x1E },
-				{ (u64)TokenType::flag, 0x1F },
+			std::map<std::string, u32> regBase = {
+				{ "reg", 0x0 },
+				{ "gen", 0x0 },
+				{ "sbp", 0x19 },
+				{ "zero", 0x1A },
+				{ "one", 0x1B },
+				{ "full", 0x1C },
+				{ "pc", 0x1D },
+				{ "stack", 0x1E },
+				{ "flag", 0x1F },
 
-				{ (u64)TokenType::_32B_, 0 },
-				{ (u64)TokenType::_16L_, 1 },
-				{ (u64)TokenType::_8L_, 2 },
-				{ (u64)TokenType::_8H_, 3 },
-				{ (u64)TokenType::_S16H_, 4 },
-				{ (u64)TokenType::_S16L_, 5 },
-				{ (u64)TokenType::_S8L_, 6 },
-				{ (u64)TokenType::_S8H_, 7 }
+				{ "32B", 0 }, { "32b", 0},
+				{ "16L", 1 }, { "16l", 1 },
+				{ "8L", 2 }, { "8l", 2 },
+				{ "8H", 3 }, { "8h", 3 },
+				{ "S16H", 4 }, { "S16h", 4 }, { "s16H", 4 }, { "s16h", 4 },
+				{ "S16L", 5 }, { "S16l", 5 }, { "s16L", 5 }, { "s16l", 5 },
+				{ "S8L", 6 }, { "S8l", 6 }, { "s8L", 6 }, { "s8l", 6 },
+				{ "S8H", 7 }, { "S8h", 7 }, { "s8H", 7 }, { "s8h", 7 }
 			};
 
-			std::map<u64, u32> flagBase = {
-				{ (u64)TokenType::zero, 0 },
-				{ (u64)TokenType::neg, 1 },
-				{ (u64)TokenType::pos, 2 },
-				{ (u64)TokenType::carry, 3 },
-				{ (u64)TokenType::carry4, 4 },
-				{ (u64)TokenType::overflow, 5 },
-				{ (u64)TokenType::one, 6 },
-				{ (u64)TokenType::gen, 7 },
+			std::map<std::string, u32> flagBase = {
+				{ "zero", 0 },
+				{ "neg", 1 },
+				{ "pos", 2 },
+				{ "carry", 3 },
+				{ "carry4", 4 },
+				{ "overflow", 5 },
+				{ "one", 6 },
+				{ "gen", 7 },
 			};
 
 			bool calculateConst(AST* cur, void* vpData) {
@@ -1589,62 +1589,62 @@ namespace assembler {
 					break;
 
 				case (u64)ASTNodeType::instruction_N + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_R + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RI + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RR + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_II + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RII + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8) + (data->instructionValue[cur->child[2]]);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8) + (data->instructionValue[cur->child[2]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_IRI + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8) + (data->instructionValue[cur->child[2]]);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]] << 8) + (data->instructionValue[cur->child[2]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
-					data->instructionValue[cur] = ((instructionBase[cur->type] + data->instructionValue[cur->child[0]]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
+					data->instructionValue[cur] = ((instructionBase[cur->text] + data->instructionValue[cur->child[0]]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
-					data->instructionValue[cur] = ((instructionBase[cur->type] + flagBase[cur->child[0]->type]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
+					data->instructionValue[cur] = ((instructionBase[cur->text] + flagBase[cur->child[0]->text]) << 24) + (data->instructionValue[cur->child[1]] << 16) + (data->instructionValue[cur->child[2]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_IXP + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 8) + (data->instructionValue[cur->child[1]]);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 8) + (data->instructionValue[cur->child[1]]);
 					push32(data->textSection, data->instructionValue[cur]);
 					break;
 				case (u64)ASTNodeType::instruction_RXR + (u64)TokenType::__end:
-					data->instructionValue[cur] = (instructionBase[cur->type] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
+					data->instructionValue[cur] = (instructionBase[cur->text] << 24) + (data->instructionValue[cur->child[0]] << 16) + (data->instructionValue[cur->child[1]]);
 
 				case (u64)ASTNodeType::reg_ex + (u64)TokenType::__end:
-					data->instructionValue[cur] = regExBase[cur->child[0]->type];
+					data->instructionValue[cur] = regExBase[cur->child[0]->text];
 					break;
 				case (u64)ASTNodeType::reg + (u64)TokenType::__end:
 					data->instructionValue[cur] = (data->instructionValue[cur->child[0]] << 3) + data->instructionValue[cur->child[1]];
 					break;
 				case (u64)ASTNodeType::regid + (u64)TokenType::__end:
-					data->instructionValue[cur] = regBase[cur->type];
+					data->instructionValue[cur] = regBase[cur->text];
 					break;
 				case (u64)ASTNodeType::reg_index + (u64)TokenType::__end:
-					data->instructionValue[cur] = regBase[cur->type] + data->expressionValue[cur->child[0]];
+					data->instructionValue[cur] = regBase[cur->text] + data->expressionValue[cur->child[0]];
 					break;
 				case (u64)ASTNodeType::regmode + (u64)TokenType::__end:
-					data->instructionValue[cur] = regBase[cur->type];
+					data->instructionValue[cur] = regBase[cur->text];
 					break;
 
 				case (u64)ASTNodeType::immidate16 + (u64)TokenType::__end:
@@ -1688,7 +1688,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 209;
+	const unsigned long long version = 301;
 
 	namespace cache {
 		using u64 = unsigned __int64;
@@ -1752,14 +1752,16 @@ namespace assembler {
 		}
 
 		void BinaryToLexer(LexerData& out, const std::vector<u64>& in, typename std::vector<u64>::const_iterator& it) {
+			using GraphID = lexer_generator::graph::ID;
+
 			u64 tableSize = *it; it++;
 			u64 endDataSize = *it; it++;
 
-			u64** table = new u64 * [tableSize];
+			GraphID** table = new GraphID * [tableSize];
 			for (size_t i = 0; i < tableSize; i++) {
-				table[i] = new u64[128];
+				table[i] = new GraphID[128];
 				for (size_t j = 0; j < 128; j++) {
-					table[i][j] = *it;
+					table[i][j] = (GraphID)*it;
 					it++;
 				}
 			}
@@ -1777,7 +1779,7 @@ namespace assembler {
 			out.table.size = tableSize;
 			out.table.table = table;
 			for (size_t i = 0; i < endDataSize; i++)
-				out.endData.push_back({ endData[i][0], { (lexer::TokenType)endData[i][1], endData[i][2] } });
+				out.endData.push_back({ (GraphID)endData[i][0], { (lexer::TokenType)endData[i][1], endData[i][2] } });
 		}
 
 		void LexerToBinary(std::vector<u64>& out, const LexerData& in) {
@@ -1845,18 +1847,20 @@ namespace assembler {
 					it++;
 			}
 
+			using Element = parser_generator::convert::Element;
+
 			for (size_t i = 0; i < vectorSize; i++) {
-				u64 head = *it; it++;
-				std::vector<u64> tmp;
+				Element head = (Element)*it; it++;
+				std::vector<Element> tmp;
 				for (size_t j = 0; j < vectorTailSize[i]; j++) {
-					tmp.push_back(*it); it++;
+					tmp.push_back((Element)*it); it++;
 				}
 				out.grammerVec.push_back({ head, tmp });
 			}
 
 			for (size_t i = 0; i < vectorSize; i++) {
-				u64 head1 = *it; it++;
-				u64 head2 = *it; it++;
+				Element head1 = (Element)*it; it++;
+				int head2 = (int)*it; it++;
 				std::vector<std::pair<bool, bool>> tmp;
 				int count = 0;
 				for (size_t j = 0; j < vectorTailSize[i]; j++) {
@@ -1867,7 +1871,7 @@ namespace assembler {
 					if (!count)
 						it++;
 				}
-				if (count) 
+				if (count)
 					it++;
 				out.ASTActionVec.push_back({ {head1, head2}, tmp });
 			}
@@ -2030,7 +2034,7 @@ namespace assembler {
 			cache::decompress(temp, buff);
 			u64 fileVer = cache::BinaryToASM(parseData, lexData, temp);
 
-			if (fileVer == assembler::version && false) {
+			if (fileVer == assembler::version) {
 				lexer::createLexer(lexData);
 				parser::createParser(parseData);
 
@@ -2092,6 +2096,7 @@ namespace assembler {
 		std::vector<Token> tokens;
 		lexer::lexer.lex(tokens, text);
 		preprocesser::tagLine(tokens);
+		std::vector<Token> tokenBackup = tokens;
 
 		if (dump.flags & AssemblerDump::getToken) {
 			dump.tokens = tokens;
@@ -2101,7 +2106,7 @@ namespace assembler {
 		preprocesser::setTokens(tokens);
 		bool validPreprocess = preprocesser::preprocess(preprocData);
 
-		if (dump.flags & AssemblerDump::getPreproc) {
+		if (dump.flags & AssemblerDump::getPreproc || !validPreprocess) {
 			dump.preprocTokens = tokens;
 			dump.preprocSuccess = validPreprocess;
 		}
@@ -2114,15 +2119,27 @@ namespace assembler {
 		int errorLine = 0;
 		bool validParse = parser::parser.parse(pAST, &errorLine, tokens);
 
-		if (dump.flags & AssemblerDump::getAST) {
+		if (dump.flags & AssemblerDump::getAST || !validParse) {
 			dump.parseSuccess = validParse;
 			dump.pAST = pAST;
 		}
 
-		if (dump.flags & AssemblerDump::getEval) {
+		if (dump.flags & AssemblerDump::getEval || !validParse) {
 			dump.parseSuccess = validParse;
 			if (!dump.parseSuccess) {
-				dump.errorMessage = pAST->child[0]->text;
+				dump.errorMessage = "error at line ";
+				dump.errorMessage += std::to_string(errorLine);
+				dump.errorMessage += ": ";
+				for (auto it = tokenBackup.cbegin(); it->line <= errorLine && it != tokenBackup.cend(); ++it) {
+					if (it->line == errorLine) {
+						if (it->type == lexer::TokenType::newline)
+							break;
+						dump.errorMessage += it->text;
+					}
+				}
+					
+				dump.errorMessage += "\nunexpected token: ";
+				dump.errorMessage += pAST->child[0]->text;
 			}
 		}
 
