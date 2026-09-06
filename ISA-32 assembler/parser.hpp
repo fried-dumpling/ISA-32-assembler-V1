@@ -124,6 +124,8 @@ namespace parser_generator {
 					}
 					if (li->dotPos < ri->dotPos)
 						return true;
+					if (li->dotPos > ri->dotPos)
+						return false;
 
 					++li; ++ri;
 				}
@@ -826,7 +828,7 @@ namespace parser_generator {
 			}
 		}
 
-		bool parse(ASTNode*& pAST, std::vector<Token> inputs) {
+		bool parse(ASTNode*& pAST, int* pErrorLine, std::vector<Token> inputs) {
 			inputs.push_back({ "", Terminal::__eot});
 
 			typedef struct _StackData {
@@ -853,7 +855,6 @@ namespace parser_generator {
 						tokenCount++;
 						break;
 					case AT::Reduce: {
-						//parseList.push_back(action.arg);
 						auto& grammer = this->grammerVec[action.arg];
 						auto& ASTRule = this->ASTActionVec[action.arg];
 
@@ -909,7 +910,17 @@ namespace parser_generator {
 		error:
 			ASTNode* nNode = new ASTNode;
 			ASTNode* errNode = new ASTNode;
-			for (u64 i = 0; i < tokenCount; i++)
+
+			u64 errorIndex = 0;
+			int errorLine = 0;
+			if (tokenCount) {
+				errorLine = inputs[tokenCount - 1].line;
+				for (errorIndex = tokenCount - 1; errorIndex != (u64)-1 && inputs[errorIndex].line == errorLine; errorIndex--) {}
+				errorIndex++;
+			}
+			*pErrorLine = errorLine;
+
+			for (u64 i = errorIndex; i < tokenCount; i++)
 				errNode->text += inputs[i].text + " ";
 			nNode->child.push_back(errNode);
 			while (!astStack.empty()) {

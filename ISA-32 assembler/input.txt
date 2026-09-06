@@ -73,7 +73,7 @@
 func_getInput:
     set gen[1].32B, 1           ; gen[1](counter) = 1
     set gen[2].32B, strBuff     ; gen[2](base) = strBuff
-    set gen[5].32B, 'k'                 ; gen[5] = 'k'
+    set gen[5].32B, 'k'         ; gen[5] = 'k'
 
 getInput_mainloop:
     ; check valid
